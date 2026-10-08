@@ -7,13 +7,14 @@ export class SpotifyApiError extends Error {
   }
 }
 
-type RequestOptions = { method?: 'GET' | 'PUT' | 'POST'; signal?: AbortSignal }
+type RequestOptions = { method?: 'GET' | 'PUT' | 'POST'; signal?: AbortSignal; body?: unknown }
 
 async function authorizedFetch(path: string, options: RequestOptions, retryAuth: boolean): Promise<Response> {
   const accessToken = await spotifyAuth.getAccessToken()
   const response = await fetch(`https://api.spotify.com/v1${path}`, {
     method: options.method ?? 'GET',
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { Authorization: `Bearer ${accessToken}`, ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     signal: options.signal,
   })
   if (response.status === 401 && retryAuth) {
@@ -36,7 +37,7 @@ export const spotifyClient = {
     if (response.status === 204) return null
     return response.json() as Promise<T>
   },
-  async command(path: string, method: 'PUT' | 'POST') {
-    await authorizedFetch(path, { method }, true)
+  async command(path: string, method: 'PUT' | 'POST', body?: unknown) {
+    await authorizedFetch(path, { method, body }, true)
   },
 }

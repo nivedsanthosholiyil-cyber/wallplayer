@@ -8,6 +8,8 @@ export interface LocalMusicRecord {
   mimeType: string
   addedAt: number
   file?: Blob
+  visualFile?: Blob
+  visualName?: string
 }
 
 const databaseName = 'musicwall-local-music'
@@ -53,6 +55,7 @@ async function transact<T>(mode: IDBTransactionMode, action: (store: IDBObjectSt
 export const localMusicDatabase = {
   list: () => transact<LocalMusicRecord[]>('readonly', (store) => store.getAll()),
   save: (record: LocalMusicRecord) => transact<IDBValidKey>('readwrite', (store) => store.put(record)),
+  remove: (id: string) => transact<undefined>('readwrite', (store) => store.delete(id)),
 }
 
 function decodeText(bytes: Uint8Array, encoding = 0) {

@@ -1,6 +1,7 @@
 const tokenKey = 'musicwall.spotify.tokens.v1'
 const transactionKey = 'musicwall.spotify.pkce.v1'
 const scopes = 'user-read-playback-state user-read-currently-playing streaming user-modify-playback-state'
+const libraryScopes = 'playlist-read-private playlist-read-collaborative user-read-recently-played user-library-read'
 
 interface TokenRecord {
   clientId: string
@@ -96,13 +97,13 @@ function clearCallbackUrl() {
   else window.history.replaceState(null, '', window.location.pathname)
 }
 
-export function buildSpotifyAuthorizationUrl(publicClientId: string, callback: string, state: string, challenge: string) {
+export function buildSpotifyAuthorizationUrl(publicClientId: string, callback: string, state: string, challenge: string, includeLibrary = false) {
   const url = new URL('https://accounts.spotify.com/authorize')
   url.search = new URLSearchParams({
     client_id: publicClientId,
     response_type: 'code',
     redirect_uri: callback,
-    scope: scopes,
+    scope: includeLibrary ? `${scopes} ${libraryScopes}` : scopes,
     state,
     code_challenge_method: 'S256',
     code_challenge: challenge,
@@ -111,6 +112,8 @@ export function buildSpotifyAuthorizationUrl(publicClientId: string, callback: s
 }
 
 export const spotifyAuth = {
+  connectLibrary: () => spotifyAuth.connect(true),
+  hasScope: (scope: string) => Boolean(tokens?.scope.split(' ').includes(scope)),
   canStream: () => Boolean(tokens?.scope.split(' ').includes('streaming')),
   redirectUri,
   getSnapshot: () => authState,
@@ -125,7 +128,7 @@ export const spotifyAuth = {
     else localStorage.removeItem('musicwall.spotify.client-id.v1')
     setAuthState({ status: clientId ? 'disconnected' : 'unconfigured', message: clientId ? '' : 'Add a Spotify Client ID to connect.', canControl: false })
   },
-  async connect() {
+  async connect(includeLibrary = false) {
     if (!clientId) throw new Error('Add a Spotify Client ID in Settings to connect.')
     const destination = new URL(redirectUri)
     if (destination.origin !== window.location.origin) throw new Error(`Open MusicWall at ${destination.origin} before connecting.`)
@@ -133,7 +136,7 @@ export const spotifyAuth = {
     const state = randomBase64Url(24)
     sessionStorage.setItem(transactionKey, JSON.stringify({ verifier, state, createdAt: Date.now() } satisfies AuthTransaction))
     setAuthState({ status: 'connecting', message: '', canControl: false })
-    window.location.assign(buildSpotifyAuthorizationUrl(clientId, redirectUri, state, await codeChallenge(verifier)))
+    window.location.assign(buildSpotifyAuthorizationUrl(clientId, redirectUri, state, await codeChallenge(verifier), includeLibrary))
   },
   completeRedirect() {
     if (callbackPromise) return callbackPromise

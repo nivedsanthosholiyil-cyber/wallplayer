@@ -149,9 +149,9 @@ export function useSpotify() {
     }
   }, [auth.status])
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (includeLibrary = false) => {
     setConnectError('')
-    try { await spotifyAuth.connect() }
+    try { await spotifyAuth.connect(includeLibrary) }
     catch (error) { setConnectError(errorMessage(error)) }
   }, [])
 

@@ -1,6 +1,6 @@
 import type { Track } from '../../types/music'
 
-export type MediaType = 'album' | 'playlist' | 'artist'
+export type MediaType = 'album' | 'playlist' | 'artist' | 'track'
 
 export interface MediaItem {
   id: string
@@ -10,12 +10,16 @@ export interface MediaItem {
   artwork: string
   description?: string
   trackIds: string[]
+  source?: 'spotify' | 'local' | 'mock'
+  uri?: string
+  sourceUrl?: string
 }
 
 export interface DiscoverySection {
   id: string
   title: string
   items: MediaItem[]
+  note?: string
 }
 
 export interface MusicSearchResults {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { AppShell } from './components/Player/AppShell'
 import { LyricsDisplay } from './components/Lyrics/LyricsDisplay'
 import { PlayerControls } from './components/Controls/PlayerControls'
@@ -10,7 +10,6 @@ import { useLyricsPreferences } from './hooks/useLyricsPreferences'
 import { usePlayback } from './hooks/usePlayback'
 import { usePlayerControls } from './hooks/usePlayerControls'
 import { mockTrack } from './data/mockTrack'
-import { MusicBrowser } from './components/MusicBrowser/MusicBrowser'
 import { recordRecentlyPlayed } from './services/musicBrowser/recentlyPlayed'
 import { useInterfaceSettings } from './hooks/useInterfaceSettings'
 import type { VisualSource } from './types/music'
@@ -23,6 +22,8 @@ import { resolveTrackVisual } from './services/visuals/VisualLibrary'
 import { SetVisualPanel } from './components/Visuals/SetVisualPanel'
 import { TrackVisualMenu } from './components/Visuals/TrackVisualMenu'
 import type { Track } from './types/music'
+
+const MusicBrowser = lazy(() => import('./components/MusicBrowser/MusicBrowser').then((module) => ({ default: module.MusicBrowser })))
 
 function App() {
   const player = usePlayback()
@@ -113,7 +114,7 @@ function App() {
         onSeek={player.seek}
         appearance={appearance}
       />
-      <MusicBrowser
+      <Suspense fallback={null}><MusicBrowser
         open={browserOpen}
         onOpen={() => setBrowserOpen(true)}
         onClose={() => setBrowserOpen(false)}
@@ -124,8 +125,15 @@ function App() {
         onAddLocalFiles={localMusic.addFiles}
         onRelinkLocalFile={localMusic.relinkFile}
         onPlayLocalTrack={player.playLocalTrack}
+        onRemoveLocalTrack={localMusic.removeTrack}
+        onSetLocalVisual={localMusic.setTrackVisual}
+        spotifyConnected={player.spotify.auth.status === 'connected'}
+        onConnectSpotify={() => { void player.spotify.connect(true) }}
+        currentTrack={player.track}
+        playbackSource={player.source}
+        isPlaying={player.isPlaying}
         appearance={appearance}
-      />
+      /></Suspense>
       {portableOpen && player.track && player.track.lyrics.length > 0 && <PortableLyricsWindow track={player.track} lyricsState={lyricsState} preferences={preferences} />}
       <SettingsPanel
         open={settingsOpen}

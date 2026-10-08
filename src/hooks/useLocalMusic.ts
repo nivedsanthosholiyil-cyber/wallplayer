@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { mockTrack } from '../data/mockTrack'
+import { playerStore } from '../store/playerStore'
 import type { Track } from '../types/music'
 import { describeAudioFile, isSupportedAudioFile, localMusicDatabase, type LocalMusicRecord } from '../services/localMusic/localMusic'
 
@@ -36,14 +37,20 @@ export function useLocalMusic() {
   const mounted = useRef(false)
 
   const materialize = useCallback((record: LocalMusicRecord) => {
-    if (!record.file || record.file.size === 0) return toTrack(record)
+    let visualUrl = objectUrls.current.get(`${record.id}:visual`)
+    if (record.visualFile && !visualUrl && typeof URL.createObjectURL === 'function') {
+      visualUrl = URL.createObjectURL(record.visualFile)
+      objectUrls.current.set(`${record.id}:visual`, visualUrl)
+    }
+    const decorate = (track: Track): Track => visualUrl && record.visualFile ? { ...track, visual: { kind: record.visualFile.type.startsWith('video/') ? 'video' : 'image', src: visualUrl } } : track
+    if (!record.file || record.file.size === 0) return decorate(toTrack(record))
     let url = objectUrls.current.get(record.id)
     if (!url) {
       if (typeof URL.createObjectURL !== 'function') return toTrack(record)
       url = URL.createObjectURL(record.file)
       objectUrls.current.set(record.id, url)
     }
-    return toTrack(record, url)
+    return decorate(toTrack(record, url))
   }, [])
 
   const refresh = useCallback(async () => {
@@ -53,7 +60,7 @@ export function useLocalMusic() {
       if (!mounted.current) return
       const nextIds = new Set(records.map((record) => record.id))
       for (const [id, url] of objectUrls.current) {
-        if (!nextIds.has(id)) { URL.revokeObjectURL(url); objectUrls.current.delete(id) }
+        if (!nextIds.has(id.replace(/:visual$/, ''))) { URL.revokeObjectURL(url); objectUrls.current.delete(id) }
       }
       setTracks(records.map(materialize))
       setError('')
@@ -118,5 +125,36 @@ export function useLocalMusic() {
     }
   }, [materialize])
 
-  return { tracks, loading, error, addFiles, relinkFile }
+  const removeTrack = useCallback(async (trackId: string) => {
+    const id = trackId.replace(/^local-/, '')
+    try {
+      await localMusicDatabase.remove(id)
+      // Removing a playing file releases its source, so stop it before revoking the URL.
+      playerStore.removeLocalLibraryTrack(trackId)
+      const url = objectUrls.current.get(id)
+      if (url) URL.revokeObjectURL(url)
+      objectUrls.current.delete(id)
+      const visualUrl = objectUrls.current.get(`${id}:visual`)
+      if (visualUrl) URL.revokeObjectURL(visualUrl)
+      objectUrls.current.delete(`${id}:visual`)
+      if (mounted.current) { setTracks((current) => current.filter((track) => track.id !== trackId)); setError('') }
+    } catch (cause) { if (mounted.current) setError(cause instanceof Error ? cause.message : 'Could not remove local music.') }
+  }, [])
+  const setTrackVisual = useCallback(async (trackId: string, file: File) => {
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) { setError('Choose an image or video file.'); return }
+    const id = trackId.replace(/^local-/, '')
+    try {
+      const record = (await localMusicDatabase.list()).find((entry) => entry.id === id)
+      if (!record) throw new Error('This track is no longer in the library.')
+      const updated = { ...record, visualFile: file, visualName: file.name }
+      await localMusicDatabase.save(updated)
+      const old = objectUrls.current.get(`${id}:visual`)
+      if (old) URL.revokeObjectURL(old)
+      objectUrls.current.delete(`${id}:visual`)
+      const next = materialize(updated)
+      playerStore.updateLocalLibraryTrack(next)
+      if (mounted.current) { setTracks((current) => current.map((track) => track.id === trackId ? next : track)); setError('') }
+    } catch (cause) { if (mounted.current) setError(cause instanceof Error ? cause.message : 'Could not save track visual.') }
+  }, [materialize])
+  return { tracks, loading, error, addFiles, relinkFile, removeTrack, setTrackVisual }
 }

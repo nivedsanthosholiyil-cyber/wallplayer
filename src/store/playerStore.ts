@@ -63,6 +63,16 @@ export const playerStore = {
     })
     return true
   },
+  updateLocalLibraryTrack(track: Track) {
+    if (state.source !== 'local') return
+    setState({ localQueue: state.localQueue.map((entry) => entry.id === track.id ? track : entry), ...(state.localTrack?.id === track.id ? { localTrack: track } : {}) })
+  },
+  removeLocalLibraryTrack(trackId: string) {
+    if (state.source !== 'local') return
+    if (state.localTrack?.id === trackId) { this.useMock(); return }
+    const localQueue = state.localQueue.filter((track) => track.id !== trackId)
+    setState({ localQueue, localIndex: localQueue.findIndex((track) => track.id === state.localTrack?.id) })
+  },
   applySpotifyPlayback(playback: NormalizedPlayback | null, track: Track | null) {
     if (state.source !== 'spotify') return
     if (!playback || !track) {
