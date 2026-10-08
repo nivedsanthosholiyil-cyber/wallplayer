@@ -11,6 +11,8 @@ export type WallpaperPreset = 'cinematic' | 'midnight' | 'noir' | 'dream' | 'neo
 export type WallpaperPosition = 'cover' | 'fill' | 'center' | 'custom'
 
 export interface AppearanceSettings {
+  motionEnabled: boolean
+  motionIntensity: number
   theme: UiTheme
   uiOpacity: number
   glassIntensity: number
@@ -58,6 +60,7 @@ export interface WallpaperSettings {
 }
 
 export const defaultAppearance: AppearanceSettings = {
+  motionEnabled: true, motionIntensity: 50,
   theme: 'default', uiOpacity: 100, glassIntensity: 50, blurIntensity: 28, accentIntensity: 50,
   playerVisibility: 'auto', controlSize: 100, controlOpacity: 25, progressStyle: 'line', progressThickness: 2,
   playerAnimationIntensity: 50, autoHideControls: true, playerPosition: 'low', cornerRadius: 10,

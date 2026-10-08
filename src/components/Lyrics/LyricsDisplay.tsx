@@ -1,4 +1,5 @@
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useMotionSettings } from '../../hooks/useMotionSettings'
 import type { Track } from '../../types/music'
 import type { LyricsState, LyricWindow } from '../../hooks/useLyrics'
 import type { LyricLayout, LyricPreferences, LyricStyle, PortableLayout } from '../../types/preferences'
@@ -21,7 +22,8 @@ interface LyricStreamProps {
 }
 
 function LyricStream({ view, trackId, style, maxVisibleLines, minimal }: LyricStreamProps) {
-  const reducedMotion = useReducedMotion()
+  const movement = useMotionSettings()
+  const reducedMotion = !movement.enabled
   const activeIndex = view.activeIndex
   const radius = minimal ? 0 : Math.floor(maxVisibleLines / 2)
   const offsets = Array.from({ length: radius * 2 + 1 }, (_, index) => index - radius)
@@ -29,7 +31,7 @@ function LyricStream({ view, trackId, style, maxVisibleLines, minimal }: LyricSt
     ? { initial: false, exit: undefined, duration: 0 }
     : style.animationStyle === 'fade'
       ? { initial: { opacity: 0, filter: 'blur(2px)' }, exit: { opacity: 0, filter: 'blur(2px)' }, duration: style.animationSpeed }
-      : { initial: { opacity: 0, y: 10, scale: .99, filter: 'blur(3px)' }, exit: { opacity: 0, y: -10, scale: .99, filter: 'blur(3px)' }, duration: style.animationSpeed }
+      : { initial: { opacity: 0, y: movement.lyricY, scale: movement.lyricScale, filter: 'blur(3px)' }, exit: { opacity: 0, y: -movement.lyricY, scale: movement.lyricScale, filter: 'blur(3px)' }, duration: style.animationSpeed * (.6 + movement.intensity * .8) }
 
   return (
     <div className="lyrics__stage">

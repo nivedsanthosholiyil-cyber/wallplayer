@@ -6,6 +6,10 @@ type Update = <K extends keyof AppearanceSettings>(key: K, value: AppearanceSett
 
 export function AppearanceSettingsPage({ settings, onChange }: { settings: AppearanceSettings; onChange: Update }) {
   return <>
+    <section className="settings-section"><h3>Motion</h3>
+      <label className="settings-toggle"><span>Motion</span><input type="checkbox" aria-label="Motion" checked={settings.motionEnabled} onChange={(event) => onChange('motionEnabled', event.target.checked)} /></label>
+      {settings.motionEnabled && <><RangeSetting label="Motion intensity" value={settings.motionIntensity} unit="%" min={0} max={100} step={25} onChange={(value) => onChange('motionIntensity', value)} /><p className="music-browser__section-note">{settings.motionIntensity <= 25 ? 'Low' : settings.motionIntensity <= 50 ? 'Medium' : 'High'} · Reduced motion follows your system preference.</p></>}
+    </section>
     <section className="settings-section"><h3>Theme</h3>
       <ThemeGallery selected={settings.theme} onSelect={(theme) => onChange('theme', theme)} />
       <RangeSetting label="UI opacity" value={settings.uiOpacity} unit="%" min={55} max={100} onChange={(value) => onChange('uiOpacity', value)} />

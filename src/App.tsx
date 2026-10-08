@@ -21,6 +21,7 @@ import { useTrackVisual } from './hooks/useTrackVisual'
 import { resolveTrackVisual } from './services/visuals/VisualLibrary'
 import { SetVisualPanel } from './components/Visuals/SetVisualPanel'
 import { TrackVisualMenu } from './components/Visuals/TrackVisualMenu'
+import { TrackMetadata } from './components/Player/TrackMetadata'
 import type { Track } from './types/music'
 
 const MusicBrowser = lazy(() => import('./components/MusicBrowser/MusicBrowser').then((module) => ({ default: module.MusicBrowser })))
@@ -86,11 +87,11 @@ function App() {
       {appearance.showLogo && <div className={`app-brand app-brand--${appearance.logoPosition} app-brand--${appearance.logoStyle}`} style={{ fontSize: appearance.logoSize, opacity: appearance.logoOpacity / 100 }} aria-label="MusicWall"><ThemeMark theme={appearance.theme} />{appearance.logoStyle !== 'symbol' && <span>{appearance.logoStyle === 'monogram' ? 'MW' : 'MusicWall'}</span>}</div>}
       <button className="settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Open settings" title="Settings"><ThemeGlyph theme={appearance.theme} name="settings" size={18} /></button>
       <main className={`app-main app-main--${preferences.position}`}>
-        {player.source === 'spotify' && player.track && <div className="spotify-track-meta">
+        {player.source === 'spotify' && player.track && <TrackMetadata track={player.track}>
           {player.track.artwork && <img src={player.track.artwork} alt={`${player.track.album || player.track.title} artwork`} />}
           <div><span>{player.track.title}</span><small>{player.track.artist}</small></div>
           <TrackVisualMenu track={player.track} onSetVisual={openVisual} />
-        </div>}
+        </TrackMetadata>}
         {!portableOpen && (player.track?.lyrics.length
           ? <LyricsDisplay track={player.track} lyricsState={lyricsState} preferences={preferences} />
           : player.track?.plainLyrics?.length

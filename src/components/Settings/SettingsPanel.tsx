@@ -11,6 +11,7 @@ import { WallpaperSettingsPage } from './WallpaperSettingsPage'
 import { ThemeGlyph } from './ThemeArtwork'
 import { ThemeArtwork } from './ThemeArtwork'
 import { themes } from '../../data/themes'
+import { useMotionSettings } from '../../hooks/useMotionSettings'
 
 type UpdatePreference = <K extends keyof LyricPreferences>(key: K, value: LyricPreferences[K]) => void
 
@@ -56,8 +57,9 @@ export function SettingsPanel({ open, preferences, onChange, onClose, portableOp
   const panel = useRef<HTMLElement>(null)
   const [styleTarget, setStyleTarget] = useState<'all' | SingerId>('all')
   const [page, setPage] = useState<'music' | 'appearance' | 'wallpaper'>('music')
-  const transitionDuration = appearance.transitionStyle === 'instant' ? 0 : appearance.animationSpeed / 100
-  const settingsSlide = appearance.transitionStyle === 'dissolve' ? 0 : '100%'
+  const movement = useMotionSettings()
+  const transitionDuration = appearance.transitionStyle === 'instant' ? 0 : movement.enabled ? movement.uiDuration / .38 * appearance.animationSpeed / 100 : .25
+  const settingsSlide = !movement.enabled || appearance.transitionStyle === 'dissolve' ? 0 : movement.panelSlide
   const target = preferences.layout === 'duet' ? styleTarget : 'all'
   const style = effectiveLyricStyle(preferences, target === 'all' ? undefined : target)
 
@@ -77,7 +79,7 @@ export function SettingsPanel({ open, preferences, onChange, onClose, portableOp
 
   function selectPage(next: typeof page) {
     setPage(next)
-    panel.current?.scrollTo({ top: 0, behavior: 'smooth' })
+    panel.current?.scrollTo({ top: 0, behavior: movement.enabled ? 'smooth' : 'instant' })
   }
 
   useEffect(() => {
@@ -111,7 +113,7 @@ export function SettingsPanel({ open, preferences, onChange, onClose, portableOp
               {([['music', 'Music & Lyrics'], ['appearance', 'Appearance'], ['wallpaper', 'Wallpaper']] as const).map(([id, label]) => <button key={id} role="tab" aria-selected={page === id} className={page === id ? 'is-selected' : ''} onClick={() => selectPage(id)}>{label}</button>)}
             </nav>
             <AnimatePresence mode="wait" initial={false}>
-              <motion.div key={page} role="tabpanel" aria-label={page === 'music' ? 'Music & Lyrics' : page === 'appearance' ? 'Appearance' : 'Wallpaper'} initial={{ opacity: 0, y: appearance.transitionStyle === 'smooth' ? 5 : 0 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: appearance.transitionStyle === 'smooth' ? -4 : 0 }} transition={{ duration: .2 * transitionDuration, ease: 'easeOut' }}>
+              <motion.div key={page} role="tabpanel" aria-label={page === 'music' ? 'Music & Lyrics' : page === 'appearance' ? 'Appearance' : 'Wallpaper'} initial={{ opacity: 0, y: appearance.transitionStyle === 'smooth' ? movement.hoverRise : 0 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: appearance.transitionStyle === 'smooth' ? -movement.hoverRise : 0 }} transition={{ duration: .2 * transitionDuration, ease: 'easeOut' }}>
             {page === 'music' && <>
 
             <section className="settings-section" aria-labelledby="layout-heading">

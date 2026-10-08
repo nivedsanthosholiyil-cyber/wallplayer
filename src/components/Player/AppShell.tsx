@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import type { AppearanceSettings } from '../../types/interfaceSettings'
 import { themes } from '../../data/themes'
 import { defaultAppearance } from '../../types/interfaceSettings'
+import { MotionSettingsProvider, useMotionSettings } from '../../hooks/useMotionSettings'
 
 interface AppShellProps {
   children: ReactNode
@@ -9,6 +10,10 @@ interface AppShellProps {
 }
 
 export function AppShell({ children, appearance }: AppShellProps) {
+  return <MotionSettingsProvider settings={appearance ?? defaultAppearance}><Shell appearance={appearance}>{children}</Shell></MotionSettingsProvider>
+}
+function Shell({ children, appearance }: AppShellProps) {
+  const movement = useMotionSettings()
   const active = appearance ?? defaultAppearance
   const theme = themes[active.theme]
   const style = appearance ? {
@@ -36,5 +41,5 @@ export function AppShell({ children, appearance }: AppShellProps) {
     '--icon-scale': appearance.iconSize / 100,
     '--progress-thickness': `${appearance.progressThickness}px`,
   } as CSSProperties : undefined
-  return <div className="app-shell" data-ui-theme={active.theme} data-theme-control={theme.controlStyle} data-theme-progress={theme.progressStyle} data-theme-decor={theme.decorativeStyle} data-theme-icons={active.theme} data-ui-transition={active.transitionStyle} data-control-shape={appearance?.controlShape ?? 'round'} data-player-position={appearance?.playerPosition ?? 'low'} data-progress-style={appearance?.progressStyle ?? 'line'} style={style}>{children}</div>
+  return <div className="app-shell" data-motion={movement.enabled ? 'on' : 'off'} data-ui-theme={active.theme} data-theme-control={theme.controlStyle} data-theme-progress={theme.progressStyle} data-theme-decor={theme.decorativeStyle} data-theme-icons={active.theme} data-ui-transition={active.transitionStyle} data-control-shape={appearance?.controlShape ?? 'round'} data-player-position={appearance?.playerPosition ?? 'low'} data-progress-style={appearance?.progressStyle ?? 'line'} style={{ ...style, '--motion-hover-scale': movement.hoverScale, '--motion-hover-rise': `${-movement.hoverRise}px`, '--motion-duration': `${movement.uiDuration}s`, '--motion-press-scale': movement.pressScale } as CSSProperties}>{children}</div>
 }

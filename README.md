@@ -37,6 +37,10 @@ The browser uses Authorization Code with PKCE. Access and refresh tokens are hel
 
 ### Music Library
 
+Carousel headers include small previous/next arrows. Touch scrolling and keyboard Left/Right also browse the same cards without changing their playback behavior.
+
+**Settings → Appearance → Motion** controls optional UI motion. ON defaults to Medium (50%); the intensity slider uses 0/25/50/75/100. OFF and the system's reduced-motion preference remove background movement, mouse parallax, lyric movement, hover transforms, and panel/player slides. Decorative background videos pause on their current frame; music playback is independent. Short state crossfades remain. These preferences use the existing settings storage and survive reloads.
+
 The floating library panel supports compact local track menus, local playlists, recent listening, and in-panel album, artist, and playlist navigation. Audio imports and per-track image/video visuals stay on this computer in IndexedDB. Local playlists and recent track metadata are saved in browser storage.
 
 Connected Spotify search uses bounded pages, request cancellation, and a short cache. **Reconnect for library access** requests the additional playlist, recently played, and saved-track permissions through the existing PKCE flow. Playback-only connections keep working without these permissions. Spotify may restrict access to some playlist contents; the panel shows a small message and preserves Back navigation. Sample Made for You collections are explicitly labelled when personal Spotify data is unavailable.

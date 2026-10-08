@@ -4,8 +4,10 @@ import { X } from 'lucide-react'
 import type { Track } from '../../types/music'
 import type { WallpaperSettings } from '../../types/interfaceSettings'
 import { chooseVideoFile, visualLibrary, type PexelsVideo, type SavedVisual, type VisualSearch } from '../../services/visuals/VisualLibrary'
+import { useMotionSettings } from '../../hooks/useMotionSettings'
 
 export function SetVisualPanel({ track, settings, onClose, onSaved }: { track: Track; settings: WallpaperSettings; onClose: () => void; onSaved: (message: string) => void }) {
+  const movement = useMotionSettings()
   const [viewportRatio, setViewportRatio] = useState(window.innerWidth / window.innerHeight)
   const [query, setQuery] = useState(`${track.artist} ${track.title}`)
   const [orientation, setOrientation] = useState('landscape')
@@ -77,7 +79,7 @@ export function SetVisualPanel({ track, settings, onClose, onSaved }: { track: T
   const previewFile = preview && chooseVideoFile(preview)
   return <div className="visual-panel-layer">
     <button className="visual-panel-scrim" aria-label="Close visual search" onClick={onClose} tabIndex={-1} />
-    <motion.div ref={panel} className="visual-panel" role="dialog" aria-modal="true" aria-labelledby="visual-panel-title" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .35, ease: 'easeOut' }}>
+    <motion.div ref={panel} className="visual-panel" role="dialog" aria-modal="true" aria-labelledby="visual-panel-title" initial={{ opacity: 0, y: movement.panelSlide }} animate={{ opacity: 1, y: 0 }} transition={{ duration: movement.uiDuration, ease: 'easeOut' }}>
       <header><div><h2 id="visual-panel-title">Set Background Visual</h2><p>{track.artist} — {track.title}</p></div><button aria-label="Close visual search" onClick={onClose}><X size={18} /></button></header>
       <form onSubmit={(event) => { event.preventDefault(); void search() }}>
         <input ref={field} aria-label="Search Pexels videos" value={query} onChange={(event) => setQuery(event.target.value)} maxLength={200} placeholder="Search Pexels" />

@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { motion } from 'framer-motion'
+import { useMotionSettings } from '../../hooks/useMotionSettings'
 import type { AppearanceSettings } from '../../types/interfaceSettings'
 import { ThemeGlyph } from '../Settings/ThemeArtwork'
 
@@ -26,7 +27,7 @@ function formatTime(seconds: number) {
 }
 
 export function PlayerControls({ currentTime, duration, isPlaying, isMuted, volume, isVisible, canControl, canControlVolume, onTogglePlay, onToggleMute, onVolumeChange, onPrevious, onNext, onSeek, appearance }: PlayerControlsProps) {
-  const reducedMotion = useReducedMotion()
+  const movement = useMotionSettings()
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
   const hidden = appearance?.playerVisibility === 'hidden'
@@ -53,8 +54,8 @@ export function PlayerControls({ currentTime, duration, isPlaying, isMuted, volu
         if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false)
       }}
       initial={false}
-      animate={{ opacity: hidden ? 0 : visible ? 1 : restOpacity, y: visible || dissolve ? 0 : 10 * intensity, filter: visible || direct ? 'blur(0px)' : `blur(${1.5 * intensity}px)` }}
-      transition={{ duration: reducedMotion || direct ? 0 : (visible ? .42 : .58) * speed, ease: [0.22, 1, 0.36, 1] }}
+      animate={{ opacity: hidden ? 0 : visible ? 1 : restOpacity, y: visible || dissolve ? 0 : movement.playerRise * intensity, filter: visible || direct || !movement.enabled ? 'blur(0px)' : `blur(${1.5 * intensity}px)` }}
+      transition={{ duration: direct ? 0 : movement.uiDuration * speed, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="player-controls__transport">
         <button className="transport-button" onClick={onPrevious} disabled={!canControl || hidden} aria-label="Previous track" title="Previous track"><ThemeGlyph theme={theme} name="previous" size={23 * iconScale} /></button>

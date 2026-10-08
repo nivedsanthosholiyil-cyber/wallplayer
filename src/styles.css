@@ -609,3 +609,20 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 @media (hover: none) { .music-browser__tile-play, .music-browser__track-menu-trigger { opacity: .8; } }
 @media (max-width: 600px) { .music-browser { top: 12px; bottom: 12px; left: 12px; width: calc(100% - 24px); height: calc(100svh - 24px); max-height: 760px; border: 1px solid rgb(var(--theme-border,231 250 251) / .13); border-radius: 16px; } }
 @media (prefers-reduced-motion: reduce) { .music-browser__art-button img { transition: none; transform: none !important; } }
+
+/* Shared motion tokens only affect movement, never theme colors or static icon geometry. */
+.video-background__scene { position: absolute; inset: -12px; transition: transform 1.2s ease-out; }
+.music-browser__tile { transition: transform var(--motion-duration, .35s) ease-out; }
+.music-browser__tile:hover, .music-browser__tile:focus-within { transform: translateY(var(--motion-hover-rise, -2px)); }
+.music-browser__tile:hover .music-browser__art-button img, .music-browser__tile:focus-within .music-browser__art-button img { transform: scale(var(--motion-hover-scale, 1.015)); filter: brightness(1.06); }
+.music-browser__section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 22px 14px; }
+.music-browser__section-heading h2 { margin: 0; }
+.music-browser__carousel-arrows { display: flex; gap: 5px; }
+.music-browser__carousel-arrows button { display: grid; place-items: center; width: 23px; height: 23px; padding: 0; border: 1px solid rgb(var(--theme-border) / .16); border-radius: 50%; background: rgb(var(--theme-surface) / .3); color: rgb(var(--theme-text) / .8); font-size: 19px; line-height: 1; }
+.music-browser__carousel-arrows button:disabled { opacity: .22; cursor: default; }
+.music-browser__carousel-arrows button:not(:disabled):hover { background: rgb(var(--theme-accent) / .15); }
+.app-shell[data-motion="on"] .transport-button:hover { transform: scale(var(--motion-hover-scale, 1.015)); }
+.app-shell[data-motion="on"] .transport-button:active { transform: scale(var(--motion-press-scale, .988)); }
+.app-shell[data-motion="off"] *, .app-shell[data-motion="off"] *::before, .app-shell[data-motion="off"] *::after { animation: none !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+.app-shell[data-motion="off"] .transport-button:hover, .app-shell[data-motion="off"] .transport-button:active, .app-shell[data-motion="off"] .music-browser__tile, .app-shell[data-motion="off"] .music-browser__art-button img, .app-shell[data-motion="off"] .music-browser__track-play { transform: none !important; }
+@media (prefers-reduced-motion: reduce) { .video-background__scene, .transport-button:hover, .transport-button:active, .music-browser__tile, .music-browser__art-button img { transform: none !important; } }

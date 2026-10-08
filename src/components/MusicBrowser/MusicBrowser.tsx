@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useMotionSettings } from '../../hooks/useMotionSettings'
 import { mockMusicBrowserProvider as catalog } from '../../data/mockCatalog'
 import { mockTracks } from '../../data/mockTrack'
 import type { DiscoverySection, MediaItem } from '../../services/musicBrowser/types'
@@ -24,7 +25,28 @@ interface MusicBrowserProps {
 }
 function SourceLink({ item }: { item: MediaItem }) { return item.sourceUrl ? <a className="music-browser__spotify-link" href={item.sourceUrl} target="_blank" rel="noreferrer" aria-label={`View ${item.title} on Spotify`}>Spotify ↗</a> : null }
 function MediaRow({ section, onSelect, onPlay, theme }: { section: DiscoverySection; onSelect: (item: MediaItem) => void; onPlay: (item: MediaItem) => void; theme: UiTheme }) {
-  return <section className="music-browser__section" aria-label={section.title}><h2>{section.title}</h2>{section.note && <p className="music-browser__section-note">{section.note}</p>}<div className="music-browser__row">{section.items.map((item) => <div className="music-browser__tile" key={`${item.source}:${item.type}:${item.id}`}>
+  const row = useRef<HTMLDivElement>(null)
+  const movement = useMotionSettings()
+  const [edges, setEdges] = useState({ left: true, right: true })
+  function measure() {
+    const element = row.current
+    if (element) setEdges({ left: element.scrollLeft <= 1, right: element.scrollLeft + element.clientWidth >= element.scrollWidth - 1 })
+  }
+  useEffect(() => {
+    measure()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    if (row.current) observer?.observe(row.current)
+    window.addEventListener('resize', measure)
+    return () => { observer?.disconnect(); window.removeEventListener('resize', measure) }
+  }, [section.items.length])
+  function shift(direction: number) {
+    const element = row.current
+    if (!element) return
+    const card = element.querySelector<HTMLElement>('.music-browser__tile')
+    const step = (card?.getBoundingClientRect().width || 102) + 12
+    element.scrollBy({ left: direction * step * Math.max(1, Math.floor(element.clientWidth / step)), behavior: movement.enabled ? 'smooth' : 'instant' })
+  }
+  return <section className="music-browser__section" aria-label={section.title}><div className="music-browser__section-heading"><h2>{section.title}</h2>{section.items.length > 0 && <div className="music-browser__carousel-arrows"><button aria-label={`Scroll ${section.title} left`} disabled={edges.left} onClick={() => shift(-1)}>‹</button><button aria-label={`Scroll ${section.title} right`} disabled={edges.right} onClick={() => shift(1)}>›</button></div>}</div>{section.note && <p className="music-browser__section-note">{section.note}</p>}<div ref={row} className="music-browser__row" onScroll={measure} onKeyDown={(event) => { if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') { event.preventDefault(); shift(event.key === 'ArrowRight' ? 1 : -1) } }}>{section.items.map((item) => <div className="music-browser__tile" key={`${item.source}:${item.type}:${item.id}`}>
     <button className="music-browser__art-button" onClick={() => onSelect(item)} aria-label={`${item.type === 'track' ? 'Play' : 'Open'} ${item.title}`}><img src={item.artwork} alt="" loading="lazy" /></button>
     <button className="music-browser__tile-play" onClick={() => onPlay(item)} aria-label={`Play ${item.title}`}><ThemeGlyph theme={theme} name="play" size={14} /></button>
     <span className="music-browser__tile-caption">{item.title}</span><small className="music-browser__tile-artist">{item.subtitle}</small><SourceLink item={item} />
@@ -38,8 +60,9 @@ const trackItem = (track: Track, source: RecentTrack['source']): MediaItem => ({
 export function MusicBrowser(props: MusicBrowserProps) {
   const { open, onOpen, onClose, onPlayTrack, localTracks, localLoading, localError, onAddLocalFiles, onRelinkLocalFile, onPlayLocalTrack, onRemoveLocalTrack, onSetLocalVisual, spotifyConnected, onConnectSpotify, currentTrack, playbackSource, isPlaying, appearance } = props
   const theme = appearance?.theme ?? 'default'
-  const reducedMotion = useReducedMotion()
-  const duration = reducedMotion || appearance?.transitionStyle === 'instant' ? 0 : .3 * (appearance?.animationSpeed ?? 100) / 100
+  const movement = useMotionSettings()
+  const reducedMotion = !movement.enabled
+  const duration = appearance?.transitionStyle === 'instant' ? 0 : movement.uiDuration * (appearance?.animationSpeed ?? 100) / 100
   const [history, setHistory] = useState<MediaItem[]>([])
   const selected = history.at(-1) || null
   const [query, setQuery] = useState('')
@@ -121,7 +144,7 @@ export function MusicBrowser(props: MusicBrowserProps) {
     {!open && <button className="music-browser__trigger" onClick={() => { setHistory([]); setQuery(''); setDebouncedQuery(''); onOpen() }} aria-label="Open music browser" title="Browse music"><ThemeGlyph theme={theme} name="queue" size={18} /></button>}
     <AnimatePresence>{open && <>
       <motion.button className="music-browser__scrim" aria-label="Close music browser" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration }} />
-      <motion.aside className="music-browser" aria-label="Music browser" initial={{ x: reducedMotion ? 0 : -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: reducedMotion ? 0 : -20, opacity: 0 }} transition={{ duration, ease: 'easeOut' }}>
+      <motion.aside className="music-browser" aria-label="Music browser" initial={{ x: reducedMotion ? 0 : -movement.panelSlide, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: reducedMotion ? 0 : -movement.panelSlide, opacity: 0 }} transition={{ duration, ease: 'easeOut' }}>
         <div className="music-browser__top"><div className="music-browser__search"><ThemeGlyph theme={theme} name="search" size={15} /><input ref={searchInput} type="search" value={query} onChange={(event) => { setQuery(event.target.value); setHistory([]); setNotice('') }} placeholder="Search music..." aria-label="Search music" /></div><button className="music-browser__close" onClick={onClose} aria-label="Close music browser"><ThemeGlyph theme={theme} name="close" size={18} /></button></div>
         <div ref={scroll} className="music-browser__scroll">
           <input ref={addInput} className="music-browser__file-input" type="file" multiple accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg,.aac" aria-label="Add local music files" onChange={(event) => { if (event.currentTarget.files?.length) onAddLocalFiles(event.currentTarget.files); event.currentTarget.value = '' }} />
