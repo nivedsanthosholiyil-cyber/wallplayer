@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" preserveAspectRatio="xMidYMid slice">
+<defs>
+<linearGradient id="sky" x2=".75" y2="1"><stop stop-color="#082d36"/><stop offset=".55" stop-color="#30818c"/><stop offset="1" stop-color="#082d36"/></linearGradient>
+<radialGradient id="light"><stop stop-color="#c4d6cd" stop-opacity=".87"/><stop offset=".32" stop-color="#30818c" stop-opacity=".34"/><stop offset="1" stop-color="#30818c" stop-opacity="0"/></radialGradient>
+<linearGradient id="water" x2="0" y2="1"><stop stop-color="#30818c" stop-opacity=".55"/><stop offset="1" stop-color="#082d36"/></linearGradient>
+<filter id="soft"><feGaussianBlur stdDeviation="15"/></filter>
+<filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".65" numOctaves="2" stitchTiles="stitch"/></filter>
+</defs>
+<rect width="500" height="500" fill="url(#sky)"/>
+<ellipse cx="342" cy="199" rx="245" ry="207" fill="url(#light)"/>
+<circle cx="348" cy="168" r="57" fill="#c4d6cd" opacity=".68" filter="url(#soft)"/>
+<circle cx="348" cy="168" r="35" fill="#c4d6cd" opacity=".77"/>
+<path d="M0 302 66 245 114 267 177 196 237 271 296 231 361 296 418 230 500 277V500H0Z" fill="#082d36" opacity=".73"/>
+<path d="M0 325Q94 296 175 316T342 307T500 329V500H0Z" fill="url(#water)"/>
+<path d="M0 350Q100 338 204 353T500 347M0 386Q117 370 225 388T500 378M0 422Q124 407 254 428T500 418" fill="none" stroke="#c4d6cd" stroke-width="2" opacity=".24"/>
+<path d="M305 337Q349 331 396 340M267 364Q349 353 438 366M307 399Q351 392 406 401" fill="none" stroke="#c4d6cd" stroke-width="7" opacity=".26" filter="url(#soft)"/>
+<rect width="500" height="500" filter="url(#grain)" opacity=".07"/>
+</svg>
