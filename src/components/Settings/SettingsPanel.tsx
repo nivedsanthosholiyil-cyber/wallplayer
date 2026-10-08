@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import type { SingerId, VisualSource } from '../../types/music'
+import type { SingerId, VisualSource, Track } from '../../types/music'
 import type { LyricFontFamily, LyricLayout, LyricPreferences, LyricPreset, LyricStyle, PortableLayout } from '../../types/preferences'
 import { effectiveLyricStyle, fontFamilies, lyricPresets, lyricStyleVariables, presetValues } from '../../data/lyricStyles'
 import type { AppearanceSettings, WallpaperPreset, WallpaperSettings } from '../../types/interfaceSettings'
@@ -40,6 +40,8 @@ interface SettingsPanelProps {
   wallpaperError: string
   onUploadWallpaper: (file: File) => Promise<void>
   onRemoveWallpaper: () => Promise<void>
+  spotifyTrack?: Track | null
+  onSetVisual?: (track: Track) => void
 }
 
 const layouts: { id: LyricLayout; label: string }[] = [
@@ -49,7 +51,7 @@ const layouts: { id: LyricLayout; label: string }[] = [
   { id: 'cinematic', label: 'Cinematic' },
 ]
 
-export function SettingsPanel({ open, preferences, onChange, onClose, portableOpen, onTogglePortable, spotify, playbackMessage, appearance, wallpaper, onAppearanceChange, onWallpaperChange, onWallpaperPreset, currentVisual, customWallpaper, wallpaperError, onUploadWallpaper, onRemoveWallpaper }: SettingsPanelProps) {
+export function SettingsPanel({ open, preferences, onChange, onClose, portableOpen, onTogglePortable, spotify, playbackMessage, appearance, wallpaper, onAppearanceChange, onWallpaperChange, onWallpaperPreset, currentVisual, customWallpaper, wallpaperError, onUploadWallpaper, onRemoveWallpaper, spotifyTrack, onSetVisual }: SettingsPanelProps) {
   const closeButton = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLElement>(null)
   const [styleTarget, setStyleTarget] = useState<'all' | SingerId>('all')
@@ -193,7 +195,7 @@ export function SettingsPanel({ open, preferences, onChange, onClose, portableOp
             </section>
             </>}
             {page === 'appearance' && <AppearanceSettingsPage settings={appearance} onChange={onAppearanceChange} />}
-            {page === 'wallpaper' && <WallpaperSettingsPage settings={wallpaper} onChange={onWallpaperChange} onPreset={onWallpaperPreset} currentVisual={currentVisual} customWallpaper={customWallpaper} error={wallpaperError} onUpload={onUploadWallpaper} onRemove={onRemoveWallpaper} />}
+            {page === 'wallpaper' && <WallpaperSettingsPage settings={wallpaper} onChange={onWallpaperChange} onPreset={onWallpaperPreset} currentVisual={currentVisual} customWallpaper={customWallpaper} error={wallpaperError} onUpload={onUploadWallpaper} onRemove={onRemoveWallpaper} spotifyTrack={spotifyTrack} onSetVisual={onSetVisual} />}
               </motion.div>
             </AnimatePresence>
           </motion.aside>

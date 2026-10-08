@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv, type Plugin, type ViteDevServer, type PreviewServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { createVisualsHandler } from './server/visuals.mjs'
 
 function lyricsProxy(apiUrl: string, apiKey: string): Plugin {
   const install = (server: ViteDevServer | PreviewServer) => {
@@ -26,11 +27,18 @@ function lyricsProxy(apiUrl: string, apiKey: string): Plugin {
   return { name: 'lyrics-server-proxy', configureServer: install, configurePreviewServer: install }
 }
 
+function visualsServer(apiKey: string, directory?: string): Plugin {
+  const install = (server: ViteDevServer | PreviewServer) => {
+    server.middlewares.use('/api/visuals', createVisualsHandler({ apiKey, directory }))
+  }
+  return { name: 'musicwall-visual-library', configureServer: install, configurePreviewServer: install }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const serverProvider = Boolean(env.LYRICS_API_URL)
   return {
-    plugins: [react(), tailwindcss(), ...(serverProvider ? [lyricsProxy(env.LYRICS_API_URL, env.LYRICS_API_KEY || '')] : [])],
+    plugins: [react(), tailwindcss(), visualsServer(env.PEXELS_API_KEY, env.MUSICWALL_VISUALS_DIR || undefined), ...(serverProvider ? [lyricsProxy(env.LYRICS_API_URL, env.LYRICS_API_KEY || '')] : [])],
     ...(serverProvider ? { define: { 'import.meta.env.VITE_LYRICS_API_URL': JSON.stringify('/api/lyrics') } } : {}),
   }
 })

@@ -37,6 +37,7 @@ export interface AppearanceSettings {
 }
 
 export interface WallpaperSettings {
+  backgroundMode: 'auto' | 'album-art' | 'track-visual'
   source: WallpaperSource
   preset: WallpaperPreset
   brightness: number
@@ -65,6 +66,7 @@ export const defaultAppearance: AppearanceSettings = {
 }
 
 export const defaultWallpaper: WallpaperSettings = {
+  backgroundMode: 'auto',
   source: 'current', preset: 'cinematic', brightness: 100, contrast: 107, saturation: 103, blur: 0,
   vignette: 40, overlayOpacity: 100, colorTemperature: 0, backgroundOpacity: 100,
   motionIntensity: 50, videoSpeed: 1, loopVideo: true, pauseWhenInactive: true,

@@ -18,6 +18,11 @@ import { ThemeMark } from './components/Settings/ThemeMark'
 import { ThemeGlyph } from './components/Settings/ThemeArtwork'
 import { useLocalMusic } from './hooks/useLocalMusic'
 import { useTrackLyrics } from './hooks/useTrackLyrics'
+import { useTrackVisual } from './hooks/useTrackVisual'
+import { resolveTrackVisual } from './services/visuals/VisualLibrary'
+import { SetVisualPanel } from './components/Visuals/SetVisualPanel'
+import { TrackVisualMenu } from './components/Visuals/TrackVisualMenu'
+import type { Track } from './types/music'
 
 function App() {
   const player = usePlayback()
@@ -30,8 +35,14 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [portableOpen, setPortableOpen] = useState(false)
   const [browserOpen, setBrowserOpen] = useState(false)
+  const [visualTrack, setVisualTrack] = useState<Track | null>(null)
+  const [visualRevision, setVisualRevision] = useState(0)
+  const [visualNotice, setVisualNotice] = useState('')
+  const savedVisual = useTrackVisual(player.source === 'spotify' ? player.track?.id ?? null : null, visualRevision)
   const controlsVisible = usePlayerControls(player.togglePlay, settingsOpen, appearance.autoHideControls && appearance.playerVisibility === 'auto')
-  const currentVisual = player.track?.visual ?? mockTrack.visual
+  const currentVisual = player.source === 'spotify'
+    ? resolveTrackVisual(player.track, savedVisual.visual, wallpaper.backgroundMode, mockTrack.visual)
+    : player.track?.visual ?? mockTrack.visual
   const visual: VisualSource = (wallpaper.source === 'custom' && customWallpaper) || (wallpaper.source === 'video' && customWallpaper?.kind === 'video')
     ? customWallpaper.kind === 'video' ? { kind: 'video', src: customWallpaper.url } : { kind: 'image', src: customWallpaper.url }
     : wallpaper.source === 'static' ? { kind: 'image', src: '/images/afterglow-night.png' } : currentVisual
@@ -45,6 +56,13 @@ function App() {
   }, [player.source, player.isPlaying, player.track?.id])
 
   const closeSettings = useCallback(() => setSettingsOpen(false), [])
+  const closeVisual = useCallback(() => setVisualTrack(null), [])
+  const openVisual = useCallback((track: Track) => { setSettingsOpen(false); setVisualTrack(track) }, [])
+  useEffect(() => {
+    if (!visualNotice) return
+    const timeout = window.setTimeout(() => setVisualNotice(''), 2800)
+    return () => window.clearTimeout(timeout)
+  }, [visualNotice])
 
   const togglePortable = useCallback(() => {
     setPortableOpen((open) => !open)
@@ -60,6 +78,8 @@ function App() {
         isMuted={player.source === 'local' || player.isMuted}
         volume={player.source === 'local' ? 0 : player.volume}
         settings={wallpaper}
+        ambient={player.source === 'spotify' && wallpaper.source === 'current'}
+        hold={player.source === 'spotify' && wallpaper.source === 'current' && wallpaper.backgroundMode !== 'album-art' && savedVisual.loading}
       />
       {appearance.showLogo && <div className={`app-brand app-brand--${appearance.logoPosition} app-brand--${appearance.logoStyle}`} style={{ fontSize: appearance.logoSize, opacity: appearance.logoOpacity / 100 }} aria-label="MusicWall"><ThemeMark theme={appearance.theme} />{appearance.logoStyle !== 'symbol' && <span>{appearance.logoStyle === 'monogram' ? 'MW' : 'MusicWall'}</span>}</div>}
       <button className="settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Open settings" title="Settings"><ThemeGlyph theme={appearance.theme} name="settings" size={18} /></button>
@@ -67,6 +87,7 @@ function App() {
         {player.source === 'spotify' && player.track && <div className="spotify-track-meta">
           {player.track.artwork && <img src={player.track.artwork} alt={`${player.track.album || player.track.title} artwork`} />}
           <div><span>{player.track.title}</span><small>{player.track.artist}</small></div>
+          <TrackVisualMenu track={player.track} onSetVisual={openVisual} />
         </div>}
         {!portableOpen && (player.track?.lyrics.length
           ? <LyricsDisplay track={player.track} lyricsState={lyricsState} preferences={preferences} />
@@ -124,7 +145,17 @@ function App() {
         wallpaperError={interfaceSettings.wallpaperError}
         onUploadWallpaper={interfaceSettings.uploadWallpaper}
         onRemoveWallpaper={interfaceSettings.removeWallpaper}
+        spotifyTrack={player.source === 'spotify' ? player.track : null}
+        onSetVisual={openVisual}
       />
+      {visualTrack && <SetVisualPanel track={visualTrack} settings={wallpaper} onClose={closeVisual} onSaved={(message) => {
+        setVisualRevision((value) => value + 1)
+        interfaceSettings.updateWallpaper('source', 'current')
+        interfaceSettings.updateWallpaper('backgroundMode', 'auto')
+        setVisualTrack(null)
+        setVisualNotice(message)
+      }} />}
+      {visualNotice && <p className="visual-notice" role="status">{visualNotice}</p>}
     </AppShell>
   )
 }

@@ -11,6 +11,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../src/services/lyrics/LyricsService', () => ({ lyricsService: { getLyrics: mocks.getLyrics } }))
+vi.mock('../src/services/visuals/VisualLibrary', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/services/visuals/VisualLibrary')>()
+  return { ...actual, visualLibrary: { ...actual.visualLibrary, getVisual: vi.fn().mockResolvedValue(null) } }
+})
 
 vi.mock('../src/services/spotify/auth', () => ({
   spotifyAuth: {
