@@ -73,6 +73,7 @@ function App() {
     <AppShell appearance={appearance}>
       <VideoBackground
         visual={visual}
+        trackId={player.source === 'spotify' ? player.track?.id : null}
         artwork={player.track?.artwork}
         isPlaying={player.isPlaying}
         isMuted={player.source === 'local' || player.isMuted}
