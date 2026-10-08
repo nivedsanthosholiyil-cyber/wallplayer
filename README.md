@@ -23,6 +23,7 @@ The browser uses Authorization Code with PKCE. Access and refresh tokens are hel
 ## Current behavior
 
 - While disconnected, previous, play/pause, next, seeking, and volume operate a local three-track playlist. The mock clock advances automatically. There is no bundled audio.
+- Local Music accepts MP3, WAV, OGG, M4A, AAC, and FLAC files from the file picker or drag and drop. Audio stays in the browser: files are stored in IndexedDB and played through local object URLs with the existing controls. URLs are revoked when the app closes. MP3 ID3 title, artist, and album tags are read when available; other files use their filename with fallback metadata. If a stored file is missing, its row offers a relink action.
 - While connected, `GET /me/player` supplies track, artist IDs, album, artwork, duration, position, play state, and device capabilities. MusicWall refreshes playback on a changing interval and extrapolates position between checks. Existing controls issue Spotify commands where supported.
 - Spotify tracks have no timed lyrics until a lyrics provider is integrated. MusicWall shows a quiet unavailable message rather than displaying incorrect mock lyrics.
 - Lyrics follow explicit start/end timestamps and singer IDs. Centered, duet/split, minimal, and cinematic layouts are available from Settings. The two duet voices have separate timed streams.
@@ -38,6 +39,7 @@ The browser uses Authorization Code with PKCE. Access and refresh tokens are hel
 - `src/data/mockTrack.ts` contains the local playlist and speaker metadata.
 - `src/store/playerStore.ts` owns normalized mock or Spotify transport state. `src/hooks/usePlayback.ts` advances the local clock and exposes player actions.
 - `src/services/spotify/auth.ts` owns PKCE, callback validation, refresh, and disconnect. `client.ts` owns authenticated requests and HTTP errors. `playback.ts` normalizes `/me/player` and isolates control endpoints. `src/hooks/useSpotify.ts` owns polling, backoff, and command dispatch.
+- `src/services/localMusic/localMusic.ts` stores local audio blobs in IndexedDB and reads available MP3 metadata. `src/hooks/useLocalMusic.ts` restores the library and manages playback object URLs. Local files use the same player store, timeline, and controls as the other playback sources.
 - `src/hooks/useLyrics.ts` determines previous/current/next lines, the active singer, and independent duet streams.
 - `src/data/lyricStyles.ts` defines the typography presets, font mapping, and shared style variables used by the player and Settings preview.
 - `src/hooks/usePlayerControls.ts` owns idle visibility and the Space shortcut. `src/hooks/useLyricsPreferences.ts` persists display settings.
