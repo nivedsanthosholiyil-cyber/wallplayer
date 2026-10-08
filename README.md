@@ -47,3 +47,13 @@ The browser uses Authorization Code with PKCE. Access and refresh tokens are hel
 - `src/services/{youtube,lyrics}/` still contains only future provider interfaces.
 
 No YouTube, lyrics API, database, or backend code is included. Spotify's [Developer Policy](https://developer.spotify.com/policy) prohibits synchronizing Spotify sound recordings with visual media. Resolve this product constraint with Spotify before shipping the proposed music-video synchronization.
+
+## Spotify playback and lyrics
+
+Spotify playback uses PKCE and a single normalized player store. Browser SDK events are used when the token includes `streaming`; Web API polling reconciles other devices, playback commands, and device changes. Existing connections with older scopes continue to work through the Web API. Disconnect and reconnect once to grant the newly requested `user-read-currently-playing` and `streaming` scopes. The SDK does not automatically transfer playback away from your current Spotify device; browser streaming requires an eligible Spotify account and browser.
+
+Lyrics come independently from LRCLIB, never Spotify. Exact track/artist/album/duration lookup is followed, when needed, by a strict artist/title and duration match for synchronized lyrics on another release. Lyrics are cached per track, aborted on track changes, and timed against the Spotify playback position. Plain lyrics remain readable and scrollable when no synchronized version exists. Singer attribution is not fabricated: tracks without singer metadata use a single lyric stream even if the saved layout is duet.
+
+No lyrics key is needed for the default public provider. Optional `VITE_LYRICS_API_URL` changes the public LRCLIB-compatible API base URL. To use an authenticated provider, set server-only `LYRICS_API_URL` and `LYRICS_API_KEY`: Vite dev/preview provides `/api/lyrics/get` and `/api/lyrics/search`, with the key sent upstream as a Bearer header. A production static hosting deployment must implement these same server routes separately; never place a provider secret in a `VITE_` variable. Other API schemas require a new `LyricsProvider` adapter.
+
+Development console diagnostics use `[Spotify]` and `[Lyrics]`, without tokens. Diagnostics are excluded from production builds. Background video and theme settings operate independently of this integration.

@@ -506,3 +506,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .app-shell[data-ui-theme="spider-man"] .player-controls[data-playing="true"] .player-controls__volume-range::-webkit-slider-thumb { background-image: url('/themes/spider-man/progress-spider.png'); filter: drop-shadow(0 0 3px rgb(225 51 64 / .4)); }
 .app-shell[data-ui-theme="spider-man"] .player-controls[data-playing="true"] .player-controls__volume-range::-moz-range-thumb { background-image: url('/themes/spider-man/progress-spider.png'); filter: drop-shadow(0 0 3px rgb(225 51 64 / .4)); }
 @media (prefers-reduced-motion: reduce) { .theme-art-image--state img { transition: none; } }
+
+/* Spotify metadata remains secondary to the existing cinematic lyric surface. */
+.spotify-track-meta { position: absolute; left: 50%; top: 12%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: 75%; color: rgba(231,245,245,.62); font-size: 13px; pointer-events: none; }
+.spotify-track-meta img { width: 32px; height: 32px; border-radius: 4px; object-fit: cover; opacity: .8; }
+.spotify-track-meta span, .spotify-track-meta small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spotify-track-meta div { min-width: 0; }
+.spotify-track-meta small { margin-top: 3px; font-size: 11px; opacity: .65; }
+.lyrics-plain { max-height: 40svh; width: min(700px, 90%); overflow-y: auto; text-align: center; color: rgba(231,245,245,.85); font-size: clamp(18px,2vw,26px); line-height: 1.7; scrollbar-width: thin; mask-image: linear-gradient(transparent,black 8%,black 92%,transparent); padding: 24px 0; }
+.lyrics-plain p { margin: .4em 0; }

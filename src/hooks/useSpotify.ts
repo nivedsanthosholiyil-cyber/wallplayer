@@ -3,6 +3,7 @@ import { spotifyAuth } from '../services/spotify/auth'
 import { SpotifyApiError } from '../services/spotify/client'
 import { spotifyPlayback, toMusicWallTrack } from '../services/spotify/playback'
 import { playerStore } from '../store/playerStore'
+import { startSpotifySdk } from '../services/spotify/sdk'
 
 export type SpotifyCommand = 'play' | 'pause' | 'previous' | 'next' | 'seek' | 'volume'
 
@@ -23,10 +24,37 @@ export function useSpotify() {
   const abortPoll = useRef<(() => void) | null>(null)
   const rateLimitUntil = useRef(0)
   const commandQueue = useRef<Promise<boolean | void>>(Promise.resolve())
+  const sdkActive = useRef(false)
+  const sdkReady = useRef(false)
+  const sdkDevice = useRef('')
 
   useEffect(() => { void spotifyAuth.completeRedirect() }, [])
 
   useEffect(() => {
+    if (auth.status !== 'connected' || !spotifyAuth.canStream?.() || import.meta.env.VITE_SPOTIFY_SDK_ENABLED === 'false') return
+    const stop = startSpotifySdk((playback) => {
+      const currentDevice = playerStore.getSnapshot().spotifyPlayback?.deviceId
+      const deviceMatches = !currentDevice || currentDevice === playback?.deviceId
+      sdkActive.current = Boolean(playback && deviceMatches)
+      if (playback) sdkDevice.current = playback.deviceId || ''
+      if (playback && deviceMatches) {
+        abortPoll.current?.()
+        playerStore.applySpotifyPlayback(playback, toMusicWallTrack(playback))
+      }
+      scheduleRefresh.current?.(playback ? 1500 : 0)
+    }, (ready) => {
+      sdkReady.current = ready
+      if (!ready) sdkActive.current = false
+    }, (error) => {
+      sdkActive.current = false
+      if (import.meta.env.DEV) console.warn('[Spotify] SDK fallback', error)
+      scheduleRefresh.current?.(0)
+    })
+    return () => { stop(); sdkActive.current = false; sdkReady.current = false; sdkDevice.current = '' }
+  }, [auth.status])
+
+  useEffect(() => {
+    if (import.meta.env.DEV) console.debug('[Spotify]', { connected: auth.status === 'connected', playerReady: sdkReady.current, status: auth.status })
     if (auth.status !== 'connected') rateLimitUntil.current = 0
     if (auth.status === 'connected') playerStore.useSpotify()
     else if (auth.status === 'expired' && playerStore.getSnapshot().source === 'spotify') {
@@ -66,14 +94,17 @@ export function useSpotify() {
         const result = await spotifyPlayback.getCurrent(requestController.signal)
         if (disposed || requestController.signal.aborted) return
         const playback = result.playback
+        if (playback?.deviceId !== sdkDevice.current) sdkActive.current = false
         playerStore.applySpotifyPlayback(playback, playback ? toMusicWallTrack(playback) : null)
+        if (import.meta.env.DEV) console.debug('[Spotify]', { connected: true, playerReady: sdkReady.current, track: playback?.title ?? null, position: playback?.position ?? 0, duration: playback?.duration ?? 0, playing: playback?.isPlaying ?? false })
         if (result.reason === 'no-device') playerStore.setSpotifyStatus('unavailable', 'No active Spotify device. Start playback in Spotify first.')
         if (result.reason === 'unsupported') playerStore.setSpotifyStatus('no-track', 'Only music tracks are supported right now.')
         failureCount = 0
         rateLimitUntil.current = 0
-        schedule(playback?.isPlaying ? 5_000 : 15_000)
+        schedule(sdkActive.current ? 15_000 : playback?.isPlaying ? 5_000 : 15_000)
       } catch (error) {
         if (disposed || requestController.signal.aborted) return
+        if (import.meta.env.DEV) console.warn('[Spotify] Playback request failed', error)
         if (spotifyAuth.getSnapshot().status === 'expired') {
           playerStore.setSpotifyStatus('expired', 'Spotify session expired. Connect again.')
           return
@@ -160,6 +191,7 @@ export function useSpotify() {
       scheduleRefresh.current?.(800)
       return true
     } catch (error) {
+      if (import.meta.env.DEV) console.warn('[Spotify] Playback command failed', action, error)
       playerStore.setSpotifyStatus('error', errorMessage(error))
       const delay = error instanceof SpotifyApiError && error.status === 429 ? Math.max(5_000, error.retryAfterSeconds * 1000) : 5_000
       if (error instanceof SpotifyApiError && error.status === 429) rateLimitUntil.current = Date.now() + delay

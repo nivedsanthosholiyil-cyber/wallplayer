@@ -6,8 +6,11 @@ const mocks = vi.hoisted(() => ({
   getCurrent: vi.fn(),
   pause: vi.fn().mockResolvedValue(undefined),
   completeRedirect: vi.fn().mockResolvedValue(undefined),
+  getLyrics: vi.fn().mockResolvedValue(null),
   authSnapshot: { status: 'connected', message: '', canControl: true, clientId: 'test', configuredByEnv: true },
 }))
+
+vi.mock('../src/services/lyrics/LyricsService', () => ({ lyricsService: { getLyrics: mocks.getLyrics } }))
 
 vi.mock('../src/services/spotify/auth', () => ({
   spotifyAuth: {
@@ -51,7 +54,7 @@ it('renders normalized Spotify timing in the existing player without inventing l
 
   await act(async () => { root.render(createElement(App)) })
   await act(async () => { await vi.advanceTimersByTimeAsync(0) })
-  expect(container.textContent).toContain('Lyrics unavailable for this track')
+  expect(container.textContent).toContain('LYRICS UNAVAILABLE')
   expect(container.querySelector<HTMLInputElement>('input[aria-label="Seek through track"]')?.max).toBe('180')
   expect(container.querySelector('button[aria-label="Pause"]')).not.toBeNull()
 
@@ -154,4 +157,53 @@ it('keeps the retry window after Spotify rate limits polling', async () => {
   expect(mocks.getCurrent).toHaveBeenCalledTimes(2)
   await act(async () => { root.unmount() })
   container.remove()
+})
+
+it('loads lyrics once per track and follows Spotify seeking without refetching', async () => {
+  mocks.getLyrics.mockResolvedValueOnce({ synced: true, lines: [{ startMs: 0, endMs: 15000, text: 'First lyric' }, { startMs: 15000, endMs: 180000, text: 'Second lyric' }] })
+  const { default: App } = await import('../src/App')
+  const { playerStore } = await import('../src/store/playerStore')
+  playerStore.useMock()
+  const callsBefore = mocks.getLyrics.mock.calls.length
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  try {
+    await act(async () => { root.render(createElement(App)); await vi.advanceTimersByTimeAsync(0) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(container.querySelector('.lyrics__current')?.textContent).toBe('First lyric')
+    await act(async () => { playerStore.seek(20); await vi.advanceTimersByTimeAsync(1200) })
+    const { lyricWindow } = await import('../src/hooks/useLyrics')
+    const snapshot = playerStore.getSnapshot()
+    expect(lyricWindow(snapshot.spotifyTrack!.lyrics, snapshot.currentTime).current?.text).toBe('Second lyric')
+    expect(mocks.getLyrics.mock.calls.length - callsBefore).toBe(1)
+  } finally {
+    await act(async () => { root.unmount() })
+    container.remove()
+  }
+})
+
+
+it('aborts old lyrics lookup and never applies its late result to a new track', async () => {
+  let resolveOld!: (result: unknown) => void
+  mocks.getLyrics.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve })).mockResolvedValueOnce({ synced: true, lines: [{ startMs: 0, endMs: 90000, text: 'New track lyric' }] })
+  const { useTrackLyrics } = await import('../src/hooks/useTrackLyrics')
+  const { playerStore } = await import('../src/store/playerStore')
+  const { toMusicWallTrack } = await import('../src/services/spotify/playback')
+  const playback = (await mocks.getCurrent()).playback
+  playerStore.useSpotify()
+  playerStore.applySpotifyPlayback(playback, toMusicWallTrack(playback))
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  function Probe({ track }: { track: ReturnType<typeof toMusicWallTrack> }) { useTrackLyrics(track, true); return null }
+  try {
+    await act(async () => { root.render(createElement(Probe, { track: toMusicWallTrack(playback) })) })
+    const signal = mocks.getLyrics.mock.calls.at(-1)![1] as AbortSignal
+    const next = { ...playback, trackId: 'next-track', title: 'Next' }
+    playerStore.applySpotifyPlayback(next, toMusicWallTrack(next))
+    await act(async () => { root.render(createElement(Probe, { track: toMusicWallTrack(next) })) })
+    expect(signal.aborted).toBe(true)
+    await act(async () => { resolveOld({ synced: true, lines: [{ startMs: 0, endMs: 90000, text: 'Old lyric' }] }) })
+    expect(playerStore.getSnapshot().spotifyTrack?.lyrics[0].text).toBe('New track lyric')
+  } finally { await act(async () => { root.unmount() }); container.remove() }
 })

@@ -36,14 +36,16 @@ function LyricStream({ view, trackId, style, maxVisibleLines, minimal }: LyricSt
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           className="lyrics__lines"
-          key={`${trackId}-${view.current?.id ?? 'gap'}`}
+          key={`${trackId}-${view.current?.id ?? `gap-${view.previous?.id ?? ''}-${view.next?.id ?? ''}`}`}
           initial={animate.initial}
           animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
           exit={animate.exit}
           transition={{ duration: animate.duration, ease: [0.22, 1, 0.36, 1] }}
         >
           {offsets.map((offset) => {
-            const line = view.lines[activeIndex + offset]
+            const gapAnchor = offset < 0 ? view.lines.indexOf(view.previous!) : view.lines.indexOf(view.next!)
+            const line = activeIndex >= 0 ? view.lines[activeIndex + offset]
+              : offset === 0 || gapAnchor < 0 ? undefined : view.lines[gapAnchor + offset + (offset < 0 ? 1 : -1)]
             const role = offset === 0 ? 'current' : 'adjacent'
             return <p key={offset} className={`lyrics__${role} ${offset < 0 ? 'lyrics__previous' : offset > 0 ? 'lyrics__next' : ''}`}>{line?.text ?? '\u00a0'}</p>
           })}
@@ -65,7 +67,8 @@ export function LyricsDisplay({ track, lyricsState, preferences, layout, compact
     compact ? 'lyrics--compact' : '',
   ].filter(Boolean).join(' ')
 
-  if (selectedLayout === 'duet') {
+  // Public LRC has no reliable singer attribution. Never invent a second singer.
+  if (selectedLayout === 'duet' && lyricsState.streams.every(({ view }) => view.lines.length > 0)) {
     return (
       <section className={classes} style={styles} aria-label="Synchronized duet lyrics">
         <div className="lyrics__duet">

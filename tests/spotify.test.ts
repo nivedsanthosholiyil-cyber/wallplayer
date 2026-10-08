@@ -34,7 +34,7 @@ describe('Spotify PKCE callback', () => {
     expect(url.origin).toBe('https://accounts.spotify.com')
     expect(url.searchParams.get('response_type')).toBe('code')
     expect(url.searchParams.get('code_challenge_method')).toBe('S256')
-    expect(url.searchParams.get('scope')).toBe('user-read-playback-state user-modify-playback-state')
+    expect(url.searchParams.get('scope')).toBe('user-read-playback-state user-read-currently-playing streaming user-modify-playback-state')
     expect(url.searchParams.has('client_secret')).toBe(false)
   })
 
@@ -143,4 +143,29 @@ describe('Spotify playback normalization and MusicWall state', () => {
     ]
     expect(lyricWindow(providerLines, playerStore.getSnapshot().currentTime).current?.text).toBe('Current')
   })
+})
+
+
+it('expires invalid refresh credentials without keeping stale authentication', async () => {
+  sessionStorage.setItem('musicwall.spotify.tokens.v1', JSON.stringify({ clientId, accessToken: 'expired', refreshToken: 'invalid', expiresAt: 1, scope: 'user-read-playback-state' }))
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'invalid_grant' }, 400)))
+  const { spotifyAuth } = await import('../src/services/spotify/auth')
+  await expect(spotifyAuth.getAccessToken()).rejects.toThrow('Spotify session expired')
+  expect(spotifyAuth.getSnapshot()).toMatchObject({ status: 'expired', canControl: false })
+  expect(sessionStorage.getItem('musicwall.spotify.tokens.v1')).toBeNull()
+  spotifyAuth.disconnect()
+  expect(spotifyAuth.getSnapshot().status).toBe('disconnected')
+})
+
+it('does not reconnect a disconnected account when an old token refresh completes', async () => {
+  sessionStorage.setItem('musicwall.spotify.tokens.v1', JSON.stringify({ clientId, accessToken: 'expired', refreshToken: 'refresh', expiresAt: 1, scope: 'user-read-playback-state' }))
+  let finish!: (response: Response) => void
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise((resolve) => { finish = resolve })))
+  const { spotifyAuth } = await import('../src/services/spotify/auth')
+  const refreshing = spotifyAuth.getAccessToken()
+  spotifyAuth.disconnect()
+  finish(jsonResponse({ access_token: 'late-token', expires_in: 3600 }))
+  await expect(refreshing).rejects.toThrow('connection changed')
+  expect(spotifyAuth.getSnapshot().status).toBe('disconnected')
+  expect(sessionStorage.getItem('musicwall.spotify.tokens.v1')).toBeNull()
 })

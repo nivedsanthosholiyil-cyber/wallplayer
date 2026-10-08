@@ -74,7 +74,7 @@ export const playerStore = {
       ? state.currentTime : playback.position
     setState({
       spotifyPlayback: playback,
-      spotifyTrack: track,
+      spotifyTrack: sameTrack && state.spotifyTrack ? { ...track, lyrics: state.spotifyTrack.lyrics, plainLyrics: state.spotifyTrack.plainLyrics } : track,
       currentTime: syncedTime,
       isPlaying: playback.isPlaying,
       volume: playback.volume ?? state.volume,
@@ -85,6 +85,10 @@ export const playerStore = {
   setSpotifyStatus(status: PlayerStatus, message: string) {
     if (state.source !== 'spotify') return
     setState({ status, message, ...(status === 'expired' ? { isPlaying: false } : {}) })
+  },
+  setSpotifyLyrics(trackId: string, lyrics: Track['lyrics'], plainLyrics: string[]) {
+    if (state.source !== 'spotify' || state.spotifyTrack?.id !== trackId) return
+    setState({ spotifyTrack: { ...state.spotifyTrack, lyrics, plainLyrics } })
   },
   play: () => setState({ isPlaying: true }),
   pause: () => setState({ isPlaying: false }),

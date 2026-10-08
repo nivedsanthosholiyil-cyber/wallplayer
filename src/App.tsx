@@ -17,10 +17,12 @@ import type { VisualSource } from './types/music'
 import { ThemeMark } from './components/Settings/ThemeMark'
 import { ThemeGlyph } from './components/Settings/ThemeArtwork'
 import { useLocalMusic } from './hooks/useLocalMusic'
+import { useTrackLyrics } from './hooks/useTrackLyrics'
 
 function App() {
   const player = usePlayback()
   const localMusic = useLocalMusic()
+  const lyricsStatus = useTrackLyrics(player.track, player.source === 'spotify')
   const lyricsState = useLyrics(player.track ?? mockTrack, player.currentTime)
   const { preferences, updatePreference } = useLyricsPreferences()
   const interfaceSettings = useInterfaceSettings()
@@ -62,9 +64,15 @@ function App() {
       {appearance.showLogo && <div className={`app-brand app-brand--${appearance.logoPosition} app-brand--${appearance.logoStyle}`} style={{ fontSize: appearance.logoSize, opacity: appearance.logoOpacity / 100 }} aria-label="MusicWall"><ThemeMark theme={appearance.theme} />{appearance.logoStyle !== 'symbol' && <span>{appearance.logoStyle === 'monogram' ? 'MW' : 'MusicWall'}</span>}</div>}
       <button className="settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Open settings" title="Settings"><ThemeGlyph theme={appearance.theme} name="settings" size={18} /></button>
       <main className={`app-main app-main--${preferences.position}`}>
+        {player.source === 'spotify' && player.track && <div className="spotify-track-meta">
+          {player.track.artwork && <img src={player.track.artwork} alt={`${player.track.album || player.track.title} artwork`} />}
+          <div><span>{player.track.title}</span><small>{player.track.artist}</small></div>
+        </div>}
         {!portableOpen && (player.track?.lyrics.length
           ? <LyricsDisplay track={player.track} lyricsState={lyricsState} preferences={preferences} />
-          : <p className="lyric-status" role="status">{player.status === 'ready' ? 'Lyrics unavailable for this track' : player.message || 'Waiting for Spotify playback'}</p>)}
+          : player.track?.plainLyrics?.length
+            ? <div className="lyrics-plain" aria-label="Unsynchronized lyrics">{player.track.plainLyrics.map((line, index) => <p key={index}>{line}</p>)}</div>
+            : <p className="lyric-status" role="status">{player.status === 'ready' ? lyricsStatus === 'loading' && player.source === 'spotify' ? 'Loading lyrics…' : 'LYRICS UNAVAILABLE' : player.message || 'Waiting for Spotify playback'}</p>)}
       </main>
       <PlayerControls
         currentTime={player.currentTime}

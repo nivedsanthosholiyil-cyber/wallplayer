@@ -57,7 +57,7 @@ export function toMusicWallTrack(playback: NormalizedPlayback): Track {
       { id: 'artist-a', name: playback.artists[0]?.name ?? 'ARTIST A' },
       { id: 'artist-b', name: playback.artists[1]?.name ?? 'ARTIST B' },
     ],
-    // A lyrics provider is a later phase. Never assign unrelated mock lyrics to a Spotify track.
+    // Lyrics are loaded independently by the provider layer for this exact track.
     lyrics: [],
   }
 }

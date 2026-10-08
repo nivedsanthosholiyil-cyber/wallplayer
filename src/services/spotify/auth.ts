@@ -1,6 +1,6 @@
 const tokenKey = 'musicwall.spotify.tokens.v1'
 const transactionKey = 'musicwall.spotify.pkce.v1'
-const scopes = 'user-read-playback-state user-modify-playback-state'
+const scopes = 'user-read-playback-state user-read-currently-playing streaming user-modify-playback-state'
 
 interface TokenRecord {
   clientId: string
@@ -111,6 +111,7 @@ export function buildSpotifyAuthorizationUrl(publicClientId: string, callback: s
 }
 
 export const spotifyAuth = {
+  canStream: () => Boolean(tokens?.scope.split(' ').includes('streaming')),
   redirectUri,
   getSnapshot: () => authState,
   subscribe(listener: () => void) {
@@ -174,14 +175,17 @@ export const spotifyAuth = {
     if (!forceRefresh && tokens.expiresAt - Date.now() > 60_000) return tokens.accessToken
     if (refreshPromise) return refreshPromise
     const previousRefresh = tokens.refreshToken
+    const refreshingTokens = tokens
     refreshPromise = (async () => {
       try {
         const result = await requestToken(new URLSearchParams({
           client_id: clientId, grant_type: 'refresh_token', refresh_token: previousRefresh,
         }))
+        if (tokens !== refreshingTokens) throw new Error('Spotify connection changed during refresh.')
         saveTokens(result, previousRefresh)
         return result.access_token
       } catch {
+        if (tokens !== refreshingTokens) throw new Error('Spotify connection changed during refresh.')
         tokens = null
         sessionStorage.removeItem(tokenKey)
         setAuthState({ status: 'expired', message: 'Spotify session expired. Connect again.', canControl: false })

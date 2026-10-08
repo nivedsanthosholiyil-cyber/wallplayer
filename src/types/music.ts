@@ -31,6 +31,7 @@ export interface Track {
   localFileName?: string
   singers: readonly [Singer, Singer]
   lyrics: TimedLyric[]
+  plainLyrics?: string[]
 }
 
 export interface NormalizedPlayback {
