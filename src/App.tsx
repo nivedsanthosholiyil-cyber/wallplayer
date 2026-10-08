@@ -16,9 +16,11 @@ import { useInterfaceSettings } from './hooks/useInterfaceSettings'
 import type { VisualSource } from './types/music'
 import { ThemeMark } from './components/Settings/ThemeMark'
 import { ThemeGlyph } from './components/Settings/ThemeArtwork'
+import { useLocalMusic } from './hooks/useLocalMusic'
 
 function App() {
   const player = usePlayback()
+  const localMusic = useLocalMusic()
   const lyricsState = useLyrics(player.track ?? mockTrack, player.currentTime)
   const { preferences, updatePreference } = useLyricsPreferences()
   const interfaceSettings = useInterfaceSettings()
@@ -49,7 +51,14 @@ function App() {
 
   return (
     <AppShell appearance={appearance}>
-      <VideoBackground visual={visual} artwork={player.track?.artwork} isPlaying={player.isPlaying} isMuted={player.isMuted} volume={player.volume} settings={wallpaper} />
+      <VideoBackground
+        visual={visual}
+        artwork={player.track?.artwork}
+        isPlaying={player.isPlaying}
+        isMuted={player.source === 'local' || player.isMuted}
+        volume={player.source === 'local' ? 0 : player.volume}
+        settings={wallpaper}
+      />
       {appearance.showLogo && <div className={`app-brand app-brand--${appearance.logoPosition} app-brand--${appearance.logoStyle}`} style={{ fontSize: appearance.logoSize, opacity: appearance.logoOpacity / 100 }} aria-label="MusicWall"><ThemeMark theme={appearance.theme} />{appearance.logoStyle !== 'symbol' && <span>{appearance.logoStyle === 'monogram' ? 'MW' : 'MusicWall'}</span>}</div>}
       <button className="settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Open settings" title="Settings"><ThemeGlyph theme={appearance.theme} name="settings" size={18} /></button>
       <main className={`app-main app-main--${preferences.position}`}>
@@ -74,7 +83,19 @@ function App() {
         onSeek={player.seek}
         appearance={appearance}
       />
-      <MusicBrowser open={browserOpen} onOpen={() => setBrowserOpen(true)} onClose={() => setBrowserOpen(false)} onPlayTrack={player.playMockTrack} appearance={appearance} />
+      <MusicBrowser
+        open={browserOpen}
+        onOpen={() => setBrowserOpen(true)}
+        onClose={() => setBrowserOpen(false)}
+        onPlayTrack={player.playMockTrack}
+        localTracks={localMusic.tracks}
+        localLoading={localMusic.loading}
+        localError={localMusic.error}
+        onAddLocalFiles={localMusic.addFiles}
+        onRelinkLocalFile={localMusic.relinkFile}
+        onPlayLocalTrack={player.playLocalTrack}
+        appearance={appearance}
+      />
       {portableOpen && player.track && player.track.lyrics.length > 0 && <PortableLyricsWindow track={player.track} lyricsState={lyricsState} preferences={preferences} />}
       <SettingsPanel
         open={settingsOpen}

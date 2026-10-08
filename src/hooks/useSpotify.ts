@@ -29,10 +29,10 @@ export function useSpotify() {
   useEffect(() => {
     if (auth.status !== 'connected') rateLimitUntil.current = 0
     if (auth.status === 'connected') playerStore.useSpotify()
-    else if (auth.status === 'expired') {
+    else if (auth.status === 'expired' && playerStore.getSnapshot().source === 'spotify') {
       playerStore.useSpotify()
       playerStore.setSpotifyStatus('expired', auth.message)
-    } else if (auth.status !== 'connecting') playerStore.useMock()
+    } else if (auth.status !== 'connecting' && playerStore.getSnapshot().source === 'spotify') playerStore.useMock()
   }, [auth.status, auth.message])
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ChangeEvent } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { mockMusicBrowserProvider as catalog } from '../../data/mockCatalog'
 import { getRecentlyPlayed, subscribeRecentlyPlayed } from '../../services/musicBrowser/recentlyPlayed'
@@ -13,6 +13,12 @@ interface MusicBrowserProps {
   onOpen: () => void
   onClose: () => void
   onPlayTrack: (trackId: string) => boolean
+  localTracks: Track[]
+  localLoading: boolean
+  localError: string
+  onAddLocalFiles: (files: FileList | File[]) => void
+  onRelinkLocalFile: (trackId: string, file: File) => void
+  onPlayLocalTrack: (trackId: string, queue: Track[]) => boolean
   appearance?: AppearanceSettings
 }
 
@@ -70,7 +76,7 @@ function TrackRow({ track, index, onPlay, theme }: { track: Track; index: number
   return <button className="music-browser__track" onClick={() => onPlay(track)} aria-label={`Play ${track.title}`}><span className="music-browser__track-number">{String(index + 1).padStart(2, '0')}</span><span className="music-browser__track-text"><strong>{track.title}</strong><small>{track.artist}</small></span><ThemeGlyph theme={theme} name="play" className="music-browser__track-play" size={15} /></button>
 }
 
-export function MusicBrowser({ open, onOpen, onClose, onPlayTrack, appearance }: MusicBrowserProps) {
+export function MusicBrowser({ open, onOpen, onClose, onPlayTrack, localTracks, localLoading, localError, onAddLocalFiles, onRelinkLocalFile, onPlayLocalTrack, appearance }: MusicBrowserProps) {
   const theme = appearance?.theme ?? 'default'
   const reducedMotion = useReducedMotion()
   const duration = reducedMotion || appearance?.transitionStyle === 'instant' ? 0 : (appearance?.animationSpeed ?? 100) / 100
@@ -79,6 +85,10 @@ export function MusicBrowser({ open, onOpen, onClose, onPlayTrack, appearance }:
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [recentIds, setRecentIds] = useState<string[]>(getRecentlyPlayed)
+  const [draggingFiles, setDraggingFiles] = useState(false)
+  const [relinkingId, setRelinkingId] = useState<string | null>(null)
+  const addInput = useRef<HTMLInputElement>(null)
+  const relinkInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => subscribeRecentlyPlayed(() => setRecentIds(getRecentlyPlayed())), [])
   useEffect(() => {
@@ -101,6 +111,10 @@ export function MusicBrowser({ open, onOpen, onClose, onPlayTrack, appearance }:
   const results = useMemo(() => catalog.search(debouncedQuery), [debouncedQuery])
   const hasResults = results.songs.length + results.artists.length + results.albums.length + results.playlists.length > 0
   const panelView = selected ? `detail-${selected.id}` : debouncedQuery ? 'search' : 'home'
+  const visibleLocalTracks = useMemo(() => {
+    const term = debouncedQuery.toLocaleLowerCase()
+    return localTracks.filter((track) => !term || `${track.title} ${track.artist} ${track.album ?? ''}`.toLocaleLowerCase().includes(term))
+  }, [debouncedQuery, localTracks])
 
   function openBrowser() {
     setSelected(null)
@@ -116,6 +130,23 @@ export function MusicBrowser({ open, onOpen, onClose, onPlayTrack, appearance }:
     if (first) playTrack(first)
   }
 
+  function handleDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault()
+    setDraggingFiles(false)
+    if (event.dataTransfer.files.length) onAddLocalFiles(event.dataTransfer.files)
+  }
+
+  function handleRelinkChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0]
+    if (file && relinkingId) onRelinkLocalFile(relinkingId, file)
+    setRelinkingId(null)
+    event.currentTarget.value = ''
+  }
+
+  function playLocal(track: Track) {
+    if (track.audioSrc && onPlayLocalTrack(track.id, localTracks.filter((entry) => Boolean(entry.audioSrc)))) onClose()
+  }
+
   return <>
     {!open && <button className="music-browser__trigger" onClick={openBrowser} aria-label="Open music browser" title="Browse music"><ThemeGlyph theme={theme} name="queue" size={18} /></button>}
     <AnimatePresence>
@@ -127,6 +158,33 @@ export function MusicBrowser({ open, onOpen, onClose, onPlayTrack, appearance }:
             <button className="music-browser__close" onClick={onClose} aria-label="Close music browser"><ThemeGlyph theme={theme} name="close" size={19} /></button>
           </div>
           <div className="music-browser__scroll">
+            <section
+              className="music-browser__local"
+              aria-label="Local Music"
+              data-dragging={draggingFiles}
+              onDragEnter={(event) => { event.preventDefault(); setDraggingFiles(true) }}
+              onDragOver={(event) => event.preventDefault()}
+              onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDraggingFiles(false) }}
+              onDrop={handleDrop}
+            >
+              <div className="music-browser__local-heading">
+                <h2>LOCAL MUSIC</h2>
+                <button className="music-browser__add-local" onClick={() => addInput.current?.click()}><span aria-hidden="true">+</span> Add Music</button>
+              </div>
+              <input ref={addInput} className="music-browser__file-input" type="file" multiple accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac" aria-label="Add local music files" onChange={(event) => { if (event.currentTarget.files?.length) onAddLocalFiles(event.currentTarget.files); event.currentTarget.value = '' }} />
+              <input ref={relinkInput} className="music-browser__file-input" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac" aria-label="Relink local music file" onChange={handleRelinkChange} />
+              {visibleLocalTracks.length > 0 ? <div className="music-browser__track-list music-browser__local-list">
+                {visibleLocalTracks.map((track, index) => <div className="music-browser__local-row" key={track.id}>
+                  <button className="music-browser__track" disabled={!track.audioSrc} onClick={() => playLocal(track)} aria-label={track.audioSrc ? `Play ${track.title}` : `${track.title} file unavailable`}>
+                    <span className="music-browser__track-number">{String(index + 1).padStart(2, '0')}</span>
+                    <span className="music-browser__track-text"><strong>{track.title}</strong><small>{track.artist}{track.album && track.album !== 'Local Music' ? ` · ${track.album}` : ''}</small></span>
+                    {track.audioSrc && <ThemeGlyph theme={theme} name="play" className="music-browser__track-play" size={15} />}
+                  </button>
+                  {!track.audioSrc && <button className="music-browser__relink" onClick={() => { setRelinkingId(track.id); relinkInput.current?.click() }}>Relink file</button>}
+                </div>)}
+              </div> : <p className="music-browser__local-empty">{localLoading ? 'Loading your local music…' : debouncedQuery ? 'No local tracks match this search.' : 'Add audio files or drop them here.'}</p>}
+              {localError && <p className="music-browser__local-error" role="status">{localError}</p>}
+            </section>
             <AnimatePresence mode="wait">
               <motion.div key={panelView} className="music-browser__content" initial={{ opacity: 0, x: reducedMotion || appearance?.transitionStyle !== 'smooth' ? 0 : 13 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: reducedMotion || appearance?.transitionStyle !== 'smooth' ? 0 : -12 }} transition={{ duration: .28 * duration, ease: 'easeOut' }}>
                 {selected ? <>

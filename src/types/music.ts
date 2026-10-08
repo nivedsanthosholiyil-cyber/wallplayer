@@ -26,6 +26,9 @@ export interface Track {
   artwork?: string | null
   duration: number
   visual: VisualSource
+  /** Object URL for a local audio file. It is never sent to a service. */
+  audioSrc?: string
+  localFileName?: string
   singers: readonly [Singer, Singer]
   lyrics: TimedLyric[]
 }

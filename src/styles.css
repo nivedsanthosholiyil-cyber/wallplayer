@@ -173,6 +173,22 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .music-browser__results .music-browser__section { margin-bottom: 28px; }
 .music-browser__results .music-browser__section > .music-browser__track-list { margin-top: 0; }
 .music-browser__empty { margin: 22px; color: rgba(230, 245, 247, .62); font-size: 12px; }
+.music-browser__local { margin: 4px 0 22px; padding: 5px 0 17px; border-bottom: 1px solid rgb(var(--theme-border, 231 250 251) / .12); transition: background-color .24s ease; }
+.music-browser__local[data-dragging="true"] { background-color: rgb(var(--theme-accent, 199 236 240) / .07); }
+.music-browser__local-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 22px 9px; }
+.music-browser__local-heading h2 { margin: 0; color: rgb(var(--theme-text, 243 248 248) / .91); font-size: 12px; font-weight: 650; letter-spacing: .09em; }
+.music-browser__add-local { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border: 1px solid rgb(var(--theme-accent, 199 236 240) / .24); border-radius: 999px; background: rgb(var(--theme-accent, 199 236 240) / .07); color: rgb(var(--theme-text, 243 248 248) / .82); font: inherit; font-size: 10px; white-space: nowrap; cursor: pointer; transition: background-color .2s ease, color .2s ease; }
+.music-browser__add-local:hover { background: rgb(var(--theme-accent, 199 236 240) / .16); color: rgb(var(--theme-text, 243 248 248)); }
+.music-browser__add-local span { font-size: 15px; line-height: 10px; }
+.music-browser__file-input { display: none; }
+.music-browser__local-list { margin-top: 0; }
+.music-browser__local-row { position: relative; display: flex; align-items: center; }
+.music-browser__local-row .music-browser__track { min-width: 0; }
+.music-browser__local-row .music-browser__track:disabled { opacity: .48; cursor: default; }
+.music-browser__local-empty, .music-browser__local-error { margin: 9px 22px 0; color: rgb(var(--theme-muted, 207 227 230) / .62); font-size: 11px; line-height: 1.5; }
+.music-browser__local-error { color: #ffc1be; }
+.music-browser__relink { flex: 0 0 auto; margin-right: 24px; padding: 5px 0 5px 8px; border: 0; background: transparent; color: rgb(var(--theme-accent-secondary, 154 198 207)); font: inherit; font-size: 10px; cursor: pointer; }
+.music-browser__relink:hover { color: rgb(var(--theme-text, 243 248 248)); }
 
 .settings-layer { position: fixed; z-index: 100; inset: 0; }
 .settings-layer__scrim { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(1, 7, 12, .48); }
