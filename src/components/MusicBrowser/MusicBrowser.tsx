@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, type Variants } from 'framer-motion'
 import { useMotionSettings } from '../../hooks/useMotionSettings'
 import { mockMusicBrowserProvider as catalog } from '../../data/mockCatalog'
 import { mockTracks } from '../../data/mockTrack'
@@ -12,6 +12,7 @@ import type { Track } from '../../types/music'
 import type { AppearanceSettings, UiTheme } from '../../types/interfaceSettings'
 import { ThemeGlyph } from '../Settings/ThemeArtwork'
 import { LocalTrackRow } from './LocalTrackRow'
+import { cinematicNavigation } from '../Player/cinematicNavigation'
 
 interface MusicBrowserProps {
   open: boolean; onOpen: () => void; onClose: () => void; onPlayTrack: (trackId: string) => boolean
@@ -61,8 +62,14 @@ export function MusicBrowser(props: MusicBrowserProps) {
   const { open, onOpen, onClose, onPlayTrack, localTracks, localLoading, localError, onAddLocalFiles, onRelinkLocalFile, onPlayLocalTrack, onRemoveLocalTrack, onSetLocalVisual, spotifyConnected, onConnectSpotify, currentTrack, playbackSource, isPlaying, appearance } = props
   const theme = appearance?.theme ?? 'default'
   const movement = useMotionSettings()
-  const reducedMotion = !movement.enabled
-  const duration = appearance?.transitionStyle === 'instant' ? 0 : movement.uiDuration * (appearance?.animationSpeed ?? 100) / 100
+  const navigation = cinematicNavigation(movement, appearance)
+  const duration = navigation.panel
+  const [direction, setDirection] = useState(1)
+  const surface: Variants = {
+    hidden: { opacity: 0, x: -navigation.libraryTravel, backdropFilter: 'blur(0px)', transition: { duration, ease: navigation.ease, when: 'afterChildren', staggerChildren: navigation.stagger, staggerDirection: -1 } },
+    visible: { opacity: 1, x: 0, backdropFilter: `blur(${appearance?.blurIntensity ?? 28}px) saturate(${105 + (appearance?.glassIntensity ?? 50) / 5}%)`, transition: { duration, ease: navigation.ease, delayChildren: navigation.stagger, staggerChildren: navigation.stagger } },
+  }
+  const content = { hidden: { opacity: 0, transition: { duration: navigation.moving ? .18 : navigation.view } }, visible: { opacity: 1, transition: { duration: navigation.content, ease: navigation.ease } } }
   const [history, setHistory] = useState<MediaItem[]>([])
   const selected = history.at(-1) || null
   const [query, setQuery] = useState('')
@@ -89,8 +96,8 @@ export function MusicBrowser(props: MusicBrowserProps) {
     window.addEventListener('keydown', escape)
     return () => window.removeEventListener('keydown', escape)
   }, [open, selected, onClose])
-  function choose(item: MediaItem) { if (item.type === 'track') { void playItem(item); return }; setHistory((entries) => [...entries, item]); setDetailOffset(0); setNotice(''); if (scroll.current) scroll.current.scrollTop = 0 }
-  function back() { setHistory((entries) => entries.slice(0,-1)); setDetailOffset(0); setNotice(''); if (scroll.current) scroll.current.scrollTop = 0 }
+  function choose(item: MediaItem) { if (item.type === 'track') { void playItem(item); return }; setDirection(1); setHistory((entries) => [...entries, item]); setDetailOffset(0); setNotice('') }
+  function back() { setDirection(-1); setHistory((entries) => entries.slice(0,-1)); setDetailOffset(0); setNotice('') }
   const filteredLocal = localTracks.filter((track) => !debouncedQuery || `${track.title} ${track.artist} ${track.album || ''}`.toLowerCase().includes(debouncedQuery.toLowerCase()))
   const results = spotifyConnected ? remote.results : catalog.search(debouncedQuery)
   const detailTracks = selected?.source === 'spotify' ? remote.detail.tracks : selected?.source === 'local' ? selected.trackIds.map((id) => localTracks.find((track) => track.id === id)).filter((track): track is Track => Boolean(track)) : selected ? catalog.getTracks(selected) : []
@@ -144,12 +151,13 @@ export function MusicBrowser(props: MusicBrowserProps) {
     {!open && <button className="music-browser__trigger" onClick={() => { setHistory([]); setQuery(''); setDebouncedQuery(''); onOpen() }} aria-label="Open music browser" title="Browse music"><ThemeGlyph theme={theme} name="queue" size={18} /></button>}
     <AnimatePresence>{open && <>
       <motion.button className="music-browser__scrim" aria-label="Close music browser" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration }} />
-      <motion.aside className="music-browser" aria-label="Music browser" initial={{ x: reducedMotion ? 0 : -movement.panelSlide, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: reducedMotion ? 0 : -movement.panelSlide, opacity: 0 }} transition={{ duration, ease: 'easeOut' }}>
-        <div className="music-browser__top"><div className="music-browser__search"><ThemeGlyph theme={theme} name="search" size={15} /><input ref={searchInput} type="search" value={query} onChange={(event) => { setQuery(event.target.value); setHistory([]); setNotice('') }} placeholder="Search music..." aria-label="Search music" /></div><button className="music-browser__close" onClick={onClose} aria-label="Close music browser"><ThemeGlyph theme={theme} name="close" size={18} /></button></div>
-        <div ref={scroll} className="music-browser__scroll">
+      <motion.aside className="music-browser" aria-label="Music browser" variants={surface} initial="hidden" animate="visible" exit="hidden">
+        <motion.div variants={content} className="music-browser__top"><div className="music-browser__search"><ThemeGlyph theme={theme} name="search" size={15} /><input ref={searchInput} type="search" value={query} onChange={(event) => { setDirection(1); setQuery(event.target.value); setHistory([]); setNotice('') }} placeholder="Search music..." aria-label="Search music" /></div><button className="music-browser__close" onClick={onClose} aria-label="Close music browser"><ThemeGlyph theme={theme} name="close" size={18} /></button></motion.div>
+        <motion.div variants={content} ref={scroll} className="music-browser__scroll">
           <input ref={addInput} className="music-browser__file-input" type="file" multiple accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg,.aac" aria-label="Add local music files" onChange={(event) => { if (event.currentTarget.files?.length) onAddLocalFiles(event.currentTarget.files); event.currentTarget.value = '' }} />
           <input ref={relinkInput} className="music-browser__file-input" type="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.ogg,.aac" aria-label="Relink local music file" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) onRelinkLocalFile(relinkingId.current,file); event.currentTarget.value = '' }} />
           {notice && <p className="music-browser__notice" role="status">{notice}</p>}
+          <AnimatePresence mode="wait" initial={false} custom={direction} onExitComplete={() => { if (scroll.current) scroll.current.scrollTop = 0 }}><motion.div key={selected ? `${selected.type}:${selected.id}` : debouncedQuery ? 'search' : 'library'} custom={direction} variants={{ enter: (direction:number) => ({opacity:0,x:direction * navigation.viewTravel}), show:{opacity:1,x:0}, leave:(direction:number) => ({opacity:0,x:-direction * navigation.viewTravel}) }} initial="enter" animate="show" exit="leave" transition={{ duration:navigation.view, ease:navigation.ease }}>
           {selected ? <div className="music-browser__content">
             <button className="music-browser__back" onClick={back}><ThemeGlyph theme={theme} name="back" size={16} /> Back</button>
             <div className="music-browser__detail-hero"><img src={selected.artwork} alt="" loading="lazy" /><div><span className="music-browser__eyebrow">{selected.source === 'local' ? 'Local playlist' : selected.type}</span><h1>{selected.title}</h1><p>{selected.subtitle}</p><SourceLink item={selected} /></div></div>
@@ -161,7 +169,7 @@ export function MusicBrowser(props: MusicBrowserProps) {
             {!remote.loading && !remote.error && !detailTracks.length && !(selected.source === 'spotify' && remote.detail.items.length) && <p className="music-browser__notice">No playable tracks in this collection.</p>}
             {selected.source === 'spotify' && remote.detail.hasNext && <button className="music-browser__load-more" disabled={remote.loading} onClick={() => setDetailOffset((offset) => offset + (selected.type === 'artist' ? 8 : 40))}>Load more</button>}
           </div> : <>
-            {debouncedQuery && <button className="music-browser__back" onClick={() => { setQuery(''); setDebouncedQuery('') }}><ThemeGlyph theme={theme} name="back" size={16} /> Library</button>}
+            {debouncedQuery && <button className="music-browser__back" onClick={() => { setDirection(-1); setQuery(''); setDebouncedQuery('') }}><ThemeGlyph theme={theme} name="back" size={16} /> Library</button>}
             <section className="music-browser__local" aria-label="Local Music" data-dragging={dragging} onDragEnter={(event) => { event.preventDefault(); setDragging(true) }} onDragOver={(event) => event.preventDefault()} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false) }} onDrop={(event) => { event.preventDefault(); setDragging(false); if (event.dataTransfer.files.length) onAddLocalFiles(event.dataTransfer.files) }}>
               <div className="music-browser__local-heading"><h2>LOCAL MUSIC</h2><button className="music-browser__add-local" onClick={() => addInput.current?.click()}><span aria-hidden="true">+</span> Add Music</button></div>
               <div className="music-browser__track-list music-browser__local-list">{filteredLocal.map((track,index) => <LocalTrackRow key={track.id} track={track} index={index} theme={theme} playlists={playlists} onPlay={() => { void play(track,'local') }} onRelink={() => { relinkingId.current = track.id; relinkInput.current?.click() }} onRemove={async () => { await onRemoveLocalTrack(track.id); const next = playlists.map((playlist) => ({ ...playlist, trackIds: playlist.trackIds.filter((id) => id !== track.id) })); try { saveLocalPlaylists(next); setPlaylists(next) } catch { setNotice('Could not update playlists.') } }} onVisual={(file) => onSetLocalVisual(track.id,file)} onAddPlaylist={(id,name) => addToPlaylist(track,id,name)} />)}</div>
@@ -175,7 +183,8 @@ export function MusicBrowser(props: MusicBrowserProps) {
               {spotifyConnected && <div className="music-browser__pagination"><button disabled={!searchOffset || remote.loading} onClick={() => setSearchOffset((offset) => Math.max(0,offset-8))}>Previous</button><span>{searchOffset / 8 + 1}</span><button disabled={!remote.results.hasNext || remote.loading} onClick={() => setSearchOffset((offset) => offset+8)}>Next</button></div>}
             </div> : <div className="music-browser__home">{home.map((section) => <MediaRow key={section.id} section={section} theme={theme} onSelect={choose} onPlay={playItem} />)}{spotifyConnected && remote.homeNote && <p className="music-browser__notice">{remote.homeNote}</p>}{spotifyConnected && (!spotifyAuth.hasScope('user-read-recently-played') || !spotifyAuth.hasScope('user-library-read')) && <button className="music-browser__load-more" onClick={onConnectSpotify}>Reconnect for library access</button>}</div>}
           </>}
-        </div>
+          </motion.div></AnimatePresence>
+        </motion.div>
       </motion.aside>
     </>}</AnimatePresence>
   </>

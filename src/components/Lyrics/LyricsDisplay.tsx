@@ -4,6 +4,7 @@ import type { Track } from '../../types/music'
 import type { LyricsState, LyricWindow } from '../../hooks/useLyrics'
 import type { LyricLayout, LyricPreferences, LyricStyle, PortableLayout } from '../../types/preferences'
 import { effectiveLyricStyle, lyricStyleVariables } from '../../data/lyricStyles'
+import { DualSplitLyrics } from './DualSplitLyrics'
 
 interface LyricsDisplayProps {
   track: Track
@@ -11,6 +12,8 @@ interface LyricsDisplayProps {
   preferences: LyricPreferences
   layout?: LyricLayout | PortableLayout
   compact?: boolean
+  isPlaying?: boolean
+  currentTime?: number
 }
 
 interface LyricStreamProps {
@@ -57,7 +60,7 @@ function LyricStream({ view, trackId, style, maxVisibleLines, minimal }: LyricSt
   )
 }
 
-export function LyricsDisplay({ track, lyricsState, preferences, layout, compact = false }: LyricsDisplayProps) {
+export function LyricsDisplay({ track, lyricsState, preferences, layout, compact = false, isPlaying = true, currentTime }: LyricsDisplayProps) {
   const selectedLayout = layout ?? preferences.layout
   const mainStyle = effectiveLyricStyle(preferences)
   const styles = lyricStyleVariables(mainStyle, preferences)
@@ -69,7 +72,8 @@ export function LyricsDisplay({ track, lyricsState, preferences, layout, compact
     compact ? 'lyrics--compact' : '',
   ].filter(Boolean).join(' ')
 
-  // Public LRC has no reliable singer attribution. Never invent a second singer.
+  if (selectedLayout === 'duet' && !compact) return <DualSplitLyrics track={track} lyricsState={lyricsState} preferences={preferences} isPlaying={isPlaying} currentTime={currentTime} />
+  // Portable duet retains its compact layout.
   if (selectedLayout === 'duet' && lyricsState.streams.every(({ view }) => view.lines.length > 0)) {
     return (
       <section className={classes} style={styles} aria-label="Synchronized duet lyrics">

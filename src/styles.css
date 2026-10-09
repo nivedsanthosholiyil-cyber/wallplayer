@@ -626,3 +626,28 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .app-shell[data-motion="off"] *, .app-shell[data-motion="off"] *::before, .app-shell[data-motion="off"] *::after { animation: none !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
 .app-shell[data-motion="off"] .transport-button:hover, .app-shell[data-motion="off"] .transport-button:active, .app-shell[data-motion="off"] .music-browser__tile, .app-shell[data-motion="off"] .music-browser__art-button img, .app-shell[data-motion="off"] .music-browser__track-play { transform: none !important; }
 @media (prefers-reduced-motion: reduce) { .video-background__scene, .transport-button:hover, .transport-button:active, .music-browser__tile, .music-browser__art-button img { transform: none !important; } }
+
+/* Dual Split occupies the right side of the available scene, above the transport. */
+.app-main .lyrics--dual-split { position: absolute; inset: 18svh clamp(28px, 7vw, 120px) max(29svh, 225px) clamp(28px, 7vw, 120px); width: auto; margin: 0; display: block; }
+.lyrics__dual-line { position: absolute; right: 0; width: min(100%, 660px); max-height: 42%; overflow: auto; scrollbar-width: none; font-family: var(--lyric-font-family, "Manrope Variable", sans-serif); transform-origin: right center; }
+.lyrics__dual-line[data-dual-position="top-right"] { top: 0; }
+.lyrics__dual-line[data-dual-position="bottom-right"] { bottom: 0; }
+.lyrics__dual-line .lyrics__current { font-size: clamp(calc(25px * var(--lyric-scale) * var(--preset-size)), calc(3.4vw * var(--lyric-scale) * var(--preset-size)), calc(52px * var(--lyric-scale) * var(--preset-size))); text-align: right; overflow-wrap: anywhere; }
+.lyrics__dual-line.lyrics--preset-street .lyrics__current { text-transform: uppercase; -webkit-text-stroke: var(--street-stroke, 0px) currentColor; }
+.app-main[data-library-open="true"] .lyrics--dual-split { left: max(440px, 7vw); }
+.app-main[data-settings-open="true"] .lyrics--dual-split { right: calc(390px + 28px); }
+.app-shell[data-player-position="raised"] .lyrics--dual-split { bottom: max(35svh, 265px); }
+@media (max-width: 900px) {
+  .app-main[data-library-open="true"][data-settings-open="true"] .lyrics--dual-split { visibility: hidden; }
+  .app-main .lyrics--dual-split { top: 17svh; right: 24px; left: 24px; bottom: max(30svh, 215px); }
+  .lyrics__dual-line { width: 100%; max-height: 43%; }
+  .lyrics__dual-line .lyrics__current { font-size: clamp(calc(21px * var(--lyric-scale) * var(--preset-size)), calc(4vw * var(--lyric-scale) * var(--preset-size)), calc(36px * var(--lyric-scale) * var(--preset-size))); }
+  .app-main[data-library-open="true"] .lyrics--dual-split { left: 428px; right: 22px; }
+  .app-main[data-settings-open="true"] .lyrics--dual-split { left: 22px; right: 418px; }
+}
+@media (max-width: 600px), (max-height: 480px) {
+  .app-main .lyrics--dual-split { top: 16svh; bottom: max(36svh, 205px); }
+  .lyrics__dual-line .lyrics__current { font-size: clamp(calc(18px * var(--lyric-scale) * var(--preset-size)), calc(4.5vw * var(--lyric-scale) * var(--preset-size)), calc(28px * var(--lyric-scale) * var(--preset-size))); }
+  /* A nearly full-width panel leaves no safe lyric area; hide rather than overlap it. */
+  .app-main[data-library-open="true"] .lyrics--dual-split, .app-main[data-settings-open="true"] .lyrics--dual-split { visibility: hidden; }
+}

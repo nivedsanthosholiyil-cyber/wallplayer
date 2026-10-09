@@ -12,6 +12,7 @@ import { ThemeGlyph } from './ThemeArtwork'
 import { ThemeArtwork } from './ThemeArtwork'
 import { themes } from '../../data/themes'
 import { useMotionSettings } from '../../hooks/useMotionSettings'
+import { cinematicNavigation } from '../Player/cinematicNavigation'
 
 type UpdatePreference = <K extends keyof LyricPreferences>(key: K, value: LyricPreferences[K]) => void
 
@@ -47,7 +48,7 @@ interface SettingsPanelProps {
 
 const layouts: { id: LyricLayout; label: string }[] = [
   { id: 'centered', label: 'Centered' },
-  { id: 'duet', label: 'Duet / Split' },
+  { id: 'duet', label: 'Dual Split' },
   { id: 'minimal', label: 'Minimal' },
   { id: 'cinematic', label: 'Cinematic' },
 ]
@@ -58,8 +59,8 @@ export function SettingsPanel({ open, preferences, onChange, onClose, portableOp
   const [styleTarget, setStyleTarget] = useState<'all' | SingerId>('all')
   const [page, setPage] = useState<'music' | 'appearance' | 'wallpaper'>('music')
   const movement = useMotionSettings()
-  const transitionDuration = appearance.transitionStyle === 'instant' ? 0 : movement.enabled ? movement.uiDuration / .38 * appearance.animationSpeed / 100 : .25
-  const settingsSlide = !movement.enabled || appearance.transitionStyle === 'dissolve' ? 0 : movement.panelSlide
+  const navigation = cinematicNavigation(movement, appearance)
+  const [direction, setDirection] = useState(1)
   const target = preferences.layout === 'duet' ? styleTarget : 'all'
   const style = effectiveLyricStyle(preferences, target === 'all' ? undefined : target)
 
@@ -78,6 +79,9 @@ export function SettingsPanel({ open, preferences, onChange, onClose, portableOp
   }
 
   function selectPage(next: typeof page) {
+    if (next === page) return
+    const pages = ['music', 'appearance', 'wallpaper']
+    setDirection(pages.indexOf(next) > pages.indexOf(page) ? 1 : -1)
     setPage(next)
     panel.current?.scrollTo({ top: 0, behavior: movement.enabled ? 'smooth' : 'instant' })
   }
@@ -105,15 +109,15 @@ export function SettingsPanel({ open, preferences, onChange, onClose, portableOp
   return (
     <AnimatePresence>
       {open && (
-        <motion.div className="settings-layer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .25 * transitionDuration }}>
+        <motion.div className="settings-layer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: navigation.panel + (navigation.moving ? .16 : 0), ease: navigation.ease }}>
           <button className="settings-layer__scrim" onClick={onClose} aria-label="Close settings" tabIndex={-1} />
-          <motion.aside ref={panel} className="settings-panel" role="dialog" aria-modal="true" aria-label="Settings" initial={{ x: settingsSlide }} animate={{ x: 0 }} exit={{ x: settingsSlide }} transition={{ duration: .38 * transitionDuration, ease: [0.22, 1, 0.36, 1] }}>
+          <motion.aside ref={panel} className="settings-panel" role="dialog" aria-modal="true" aria-label="Settings" initial={{ opacity: 0, y: navigation.settingsTravel, scale: navigation.scale, backdropFilter:'blur(0px)' }} animate={{ opacity:1, y:0, scale:1, backdropFilter:`blur(${appearance.blurIntensity}px) saturate(${105 + appearance.glassIntensity / 5}%)` }} exit={{ opacity:0,y:navigation.settingsTravel,scale:navigation.scale,backdropFilter:'blur(0px)',transition:{duration:navigation.panel,delay:navigation.moving ? .16 : 0,ease:navigation.ease} }} transition={{ duration: navigation.panel, ease: navigation.ease }}>
             <header className="settings-panel__header"><h2>Settings</h2>{appearance.theme === 'batman' && <ThemeArtwork className="settings-panel__theme-decoration" asset={themes.batman.assets.decorations[0]} theme="batman" size={56} />}<button ref={closeButton} className="settings-panel__close" onClick={onClose} aria-label="Close settings"><ThemeGlyph theme={appearance.theme} name="close" size={18} /></button></header>
             <nav className="settings-tabs" aria-label="Settings pages" role="tablist">
               {([['music', 'Music & Lyrics'], ['appearance', 'Appearance'], ['wallpaper', 'Wallpaper']] as const).map(([id, label]) => <button key={id} role="tab" aria-selected={page === id} className={page === id ? 'is-selected' : ''} onClick={() => selectPage(id)}>{label}</button>)}
             </nav>
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div key={page} role="tabpanel" aria-label={page === 'music' ? 'Music & Lyrics' : page === 'appearance' ? 'Appearance' : 'Wallpaper'} initial={{ opacity: 0, y: appearance.transitionStyle === 'smooth' ? movement.hoverRise : 0 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: appearance.transitionStyle === 'smooth' ? -movement.hoverRise : 0 }} transition={{ duration: .2 * transitionDuration, ease: 'easeOut' }}>
+            <AnimatePresence mode="wait" initial={false} custom={direction}>
+              <motion.div key={page} role="tabpanel" aria-label={page === 'music' ? 'Music & Lyrics' : page === 'appearance' ? 'Appearance' : 'Wallpaper'} custom={direction} variants={{enter:(direction:number)=>({opacity:0,x:direction * navigation.viewTravel}),show:{opacity:1,x:0},leave:(direction:number)=>({opacity:0,x:-direction * navigation.viewTravel})}} initial="enter" animate="show" exit="leave" transition={{ duration: navigation.view, ease: navigation.ease }}>
             {page === 'music' && <>
 
             <section className="settings-section" aria-labelledby="layout-heading">

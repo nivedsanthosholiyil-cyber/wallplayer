@@ -86,14 +86,14 @@ function App() {
       />
       {appearance.showLogo && <div className={`app-brand app-brand--${appearance.logoPosition} app-brand--${appearance.logoStyle}`} style={{ fontSize: appearance.logoSize, opacity: appearance.logoOpacity / 100 }} aria-label="MusicWall"><ThemeMark theme={appearance.theme} />{appearance.logoStyle !== 'symbol' && <span>{appearance.logoStyle === 'monogram' ? 'MW' : 'MusicWall'}</span>}</div>}
       <button className="settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Open settings" title="Settings"><ThemeGlyph theme={appearance.theme} name="settings" size={18} /></button>
-      <main className={`app-main app-main--${preferences.position}`}>
+      <main className={`app-main app-main--${preferences.position}`} data-library-open={browserOpen} data-settings-open={settingsOpen}>
         {player.source === 'spotify' && player.track && <TrackMetadata track={player.track}>
           {player.track.artwork && <img src={player.track.artwork} alt={`${player.track.album || player.track.title} artwork`} />}
           <div><span>{player.track.title}</span><small>{player.track.artist}</small></div>
           <TrackVisualMenu track={player.track} onSetVisual={openVisual} />
         </TrackMetadata>}
         {!portableOpen && (player.track?.lyrics.length
-          ? <LyricsDisplay track={player.track} lyricsState={lyricsState} preferences={preferences} />
+          ? <LyricsDisplay track={player.track} lyricsState={lyricsState} preferences={preferences} isPlaying={player.isPlaying} currentTime={player.currentTime} />
           : player.track?.plainLyrics?.length
             ? <div className="lyrics-plain" aria-label="Unsynchronized lyrics">{player.track.plainLyrics.map((line, index) => <p key={index}>{line}</p>)}</div>
             : <p className="lyric-status" role="status">{player.status === 'ready' ? lyricsStatus === 'loading' && player.source === 'spotify' ? 'Loading lyrics…' : 'LYRICS UNAVAILABLE' : player.message || 'Waiting for Spotify playback'}</p>)}
