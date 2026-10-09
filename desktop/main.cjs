@@ -31,7 +31,7 @@ function createTray() {
   if (tray || process.platform !== 'win32') return
   const iconPath = join(app.getAppPath(), 'dist-desktop', 'artwork', 'afterglow.svg')
   let icon = nativeImage.createFromPath(iconPath)
-  if (icon.isEmpty()) icon = nativeImage.createFromPath(process.execPath)
+  if (icon.isEmpty()) icon = nativeImage.createFromPath(join(app.getAppPath(), 'dist-desktop', 'images', 'afterglow-night.png'))
   tray = new Tray(icon)
   tray.setToolTip('MusicWall')
   updateTrayMenu()
