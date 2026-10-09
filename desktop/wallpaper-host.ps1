@@ -101,9 +101,9 @@ while ([MusicWallDesktop]::IsWindow($hwnd)) {
     }
   }
 
-  $host = Get-DesktopHost
-  if ($host -ne [IntPtr]::Zero -and $host -ne $lastHost) {
-    [void][MusicWallDesktop]::SetParent($hwnd, $host)
+  $desktopHost = Get-DesktopHost
+  if ($desktopHost -ne [IntPtr]::Zero -and $desktopHost -ne $lastHost) {
+    [void][MusicWallDesktop]::SetParent($hwnd, $desktopHost)
     $style = [MusicWallDesktop]::GetWindowLongPtr($hwnd, $GWL_STYLE).ToInt64()
     $style = ($style -band (-bnot $removeStyle)) -bor $WS_CHILD
     [void][MusicWallDesktop]::SetWindowLongPtr($hwnd, $GWL_STYLE, [IntPtr]::new($style))
@@ -113,7 +113,7 @@ while ([MusicWallDesktop]::IsWindow($hwnd)) {
     if ($height -le 0) { $height = [MusicWallDesktop]::GetSystemMetrics(1) }
     [void][MusicWallDesktop]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, $width, $height, $SWP_NOZORDER -bor $SWP_NOACTIVATE -bor $SWP_FRAMECHANGED)
     [void][MusicWallDesktop]::ShowWindow($hwnd, $SW_SHOWNOACTIVATE)
-    $lastHost = $host
+    $lastHost = $desktopHost
     try { Set-Content -LiteralPath $StateFile -Value 'attached' -NoNewline } catch {}
   }
   Start-Sleep -Milliseconds 1500
