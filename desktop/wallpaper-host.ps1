@@ -92,6 +92,13 @@ while ([MusicWallDesktop]::IsWindow($hwnd)) {
   if (Test-Path -LiteralPath $StateFile) {
     $requested = (Get-Content -LiteralPath $StateFile -Raw -ErrorAction SilentlyContinue).Trim()
     if ($requested -eq 'stop') { break }
+    if ($requested -eq 'window') {
+      [void][MusicWallDesktop]::SetParent($hwnd, [IntPtr]::Zero)
+      [void][MusicWallDesktop]::SetWindowLongPtr($hwnd, $GWL_STYLE, $originalStyle)
+      [void][MusicWallDesktop]::SetWindowPos($hwnd, [IntPtr]::Zero, 80, 80, 1360, 900, $SWP_NOZORDER -bor $SWP_NOACTIVATE -bor $SWP_FRAMECHANGED)
+      [void][MusicWallDesktop]::ShowWindow($hwnd, 5)
+      break
+    }
   }
 
   $host = Get-DesktopHost
