@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { EventEmitter } from 'node:events'
-import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { request as httpRequest } from 'node:http'
@@ -141,16 +141,4 @@ it('bounds proxy parameters, keeps keys server-side and disallows upstream redir
   expect(options).toMatchObject({ headers: { Authorization: 'Bearer private-key' }, redirect: 'error' })
   expect(response.end.mock.calls[0][0].toString()).not.toContain('private-key')
   expect(() => createLyricsHandler({ apiUrl: 'http://provider.example' })).toThrow('HTTPS')
-})
-
-it('wires the Windows desktop host and a return-to-window control path', async () => {
-  const main = await readFile(new URL('../desktop/main.cjs', import.meta.url), 'utf8')
-  const host = await readFile(new URL('../desktop/wallpaper-host.ps1', import.meta.url), 'utf8')
-  expect(main).toContain('startWallpaperHost()')
-  expect(main).toContain("writeFileSync(wallpaperStateFile, 'window', 'utf8')")
-  expect(main).toContain("new Tray(icon)")
-  expect(host).toContain('SHELLDLL_DefView')
-  expect(host).toContain('[MusicWallDesktop]::SetParent')
-  expect(host).toContain('[MusicWallDesktop]::GetSystemMetrics(78)')
-  expect(host).not.toContain('$host = Get-DesktopHost')
 })

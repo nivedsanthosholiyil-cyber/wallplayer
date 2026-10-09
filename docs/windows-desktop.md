@@ -34,6 +34,8 @@ The NSIS installer supports per-user installation and directory selection. It pr
 3. Electron waits for an explicit readiness message before loading `http://127.0.0.1:4173/`. It never starts Vite. A missing build, port conflict, startup timeout, or unexpected server exit produces an error dialog.
 4. On quit, the parent requests HTTP shutdown, then terminates an unresponsive child after a bounded grace period. The child also checks parent liveness. A second launch focuses the existing window.
 
+On Windows, the desktop host can attach the same renderer behind desktop icons. Mode switching, tray actions, helper lifecycle and remaining verification gates are documented in [Windows wallpaper hosting](windows-wallpaper-host.md). `--windowed` forces the original application window. The fixed origin, OAuth relay and storage architecture below are retained.
+
 Port 4173 is deliberately fixed. The server binds exclusively to IPv4 loopback and rejects unexpected Host headers and cross-origin API calls. If occupied, startup fails clearly; it never connects to an unrelated process or chooses a new origin that would orphan IndexedDB/settings and invalidate OAuth configuration.
 
 The renderer is sandboxed, with context isolation, Node integration disabled, web security enabled, no webviews, and **no preload or filesystem/shell IPC bridge**. File inputs, drag/drop, IndexedDB, and blob URLs continue using the browser APIs already present. Existing local-file relinking and wallpaper object-URL cleanup remain unchanged.

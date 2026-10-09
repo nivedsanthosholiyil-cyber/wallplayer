@@ -1,33 +1,51 @@
 # Windows live wallpaper host (experimental)
 
-This branch adds an experimental Windows-only host for the existing MusicWall renderer.
+MusicWall attaches its existing Electron renderer to the Windows desktop. It does not use fullscreen or always-on-top as a wallpaper substitute. Native attachment checks do not establish a fully verified desktop release.
 
-## Behavior
+## Architecture
 
-- On Windows, Electron creates the existing MusicWall window and starts `desktop/wallpaper-host.ps1`.
-- The helper locates the desktop WorkerW host, reparents the Electron native window behind the desktop icon view, removes normal window chrome, and sizes it to the Windows virtual-screen bounds.
-- A MusicWall tray icon exposes **Open MusicWall window**, **Set as desktop wallpaper**, and **Quit MusicWall**.
-- The helper polls for Explorer/desktop-host changes and attempts to reattach when the WorkerW host changes.
-- The existing React renderer, player, themes, lyrics and settings are reused; this does not create a second audio renderer.
+- `desktop/main.cjs` owns the window, server, tray, persisted mode and recovery. No renderer IPC/preload or filesystem bridge is added.
+- `desktop/wallpaper-controller.cjs` starts the trusted PowerShell helper with a hidden console and piped JSON commands/status. It waits for native verification, matches acknowledgements, watches heartbeats and waits for termination.
+- `desktop/wallpaper-host.ps1` compiles bundled `wallpaper-native.cs` using Windows PowerShell Add-Type. Both files are copied from the application archive to `%APPDATA%/MusicWall/wallpaper-runtime`. No execution-policy override or system/security setting is changed. Organization policy can block the helper; use normal mode then.
+- Win32 callbacks run in C#, avoiding PowerShell callback/runspace issues. Only the HWND owned by the specified Electron parent is changed.
+- Windows 11 raised desktop: a layered child of Progman below SHELLDLL_DefView and above background WorkerW. Classic desktop: the following empty WorkerW in the same shell process. No unverified Progman fallback.
+- Child styles precede SetParent. Native errors, actual parent/style, icon-view stacking and physical virtual-screen bounds are checked. Polling repairs geometry/stacking only when necessary.
+- Normal mode restores original parent/styles/bounds and synchronizes Electron visibility. Switching modes retains the same WebContents, playback and sessionStorage.
 
-## Safety and limitations
+## Controls and lifecycle
 
-This is a prototype, not a verified Windows release. It invokes Windows PowerShell with a bundled script copied to the per-user MusicWall data directory. The helper uses Win32 APIs via PowerShell `Add-Type`; enterprise PowerShell policy may block it. No policy setting is changed system-wide.
+The tray offers **Open MusicWall window**, **Set as desktop wallpaper**, and **Quit MusicWall**; double-click opens the normal window. The normal File menu offers those actions with Ctrl+Alt+O and Ctrl+Alt+W. These are application accelerators, not global hotkeys when the desktop child lacks focus.
 
-The helper currently sizes the wallpaper to virtual-screen bounds but has not been verified with mixed-DPI, portrait, negative-coordinate, or multi-monitor layouts. Explorer restart behavior, click-through behavior around desktop icons, taskbar interactions, sleep/resume, GPU/video decoding, and exit cleanup require manual Windows testing. The host is experimental and must not be described as production-ready until those checks pass.
+First Windows launch defaults to wallpaper mode; later launches read `%APPDATA%/MusicWall/desktop-mode.json`. `npm run desktop -- --windowed` forces normal mode; `--wallpaper` forces attachment. A second instance requests a mode instead of starting another server.
 
-The script is not executed by the automated Vitest suite. The added test only verifies that the main-process wiring and expected Win32 host operations are present; it does not prove the Win32 calls work on a real desktop.
+Temporary Explorer host loss is retried for up to 25 seconds. A destroyed HWND triggers bounded window recreation; repeated failures report clearly. Recreating a destroyed renderer loses sessionStorage/current local playback, so Spotify may need reconnection. This path has protocol coverage but needs a real Explorer-restart test.
 
-## Windows verification
+Quit sends stop/EOF to the helper, which detaches/hides its own HWND and exits before server shutdown. A hung helper is terminated after a grace period; exit confirmation is recorded honestly. Helper crashes trigger normal-window recovery instead of a falsely active wallpaper flag.
 
-On a Windows x64 development machine:
+## Diagnostics
 
-1. Run `npm ci`, `npm test`, and `npm run build:desktop`.
-2. Run `npm run desktop` for the unpackaged app.
-3. Confirm the wallpaper appears behind icons and the taskbar remains usable.
-4. Open the tray menu and switch to the normal MusicWall window; switch back to wallpaper mode.
-5. Restart Windows Explorer from Task Manager and check that the wallpaper reattaches.
-6. Test a second monitor, monitor arrangement changes, lock/unlock, sleep/resume, and quit/relaunch.
-7. Only after these checks pass, build the installer with `npm run package:win`.
+`%APPDATA%/MusicWall/desktop.log` records native status, mode changes and shutdown. `Verified` means native geometry/parent/style/stacking passed. It does **not** prove correct visual compositing, usable desktop icons or audible playback.
 
-If PowerShell is blocked or the helper fails, use the tray/normal-window fallback and inspect `%APPDATA%/MusicWall/desktop.log`. Do not bypass organization-managed Windows policy to force the helper to run.
+Read-only topology probe:
+
+```powershell
+powershell.exe -NoLogo -NoProfile -NonInteractive -File desktop/wallpaper-host.ps1 -Probe
+```
+
+Optional `-WindowHandle <hex> -ParentPid <electron-pid>` with `-Probe` inspects an owned MusicWall HWND without changing it. Do not supply other applications' handles.
+
+## Tests and release gates
+
+`tests/wallpaper-host.test.mjs` tests controller streams, readiness, errors, acknowledgements, unexpected exit, lost-window recovery notification and graceful/forced shutdown. Windows tests compile the actual helper, read desktop topology and reject invalid ownership. These do not simulate visually verified wallpaper.
+
+See [the verification report](windows-wallpaper-verification.md) for command results and observed scope. Before production, manually verify:
+
+1. Wallpaper behind icons; selecting/opening icons; taskbar, Start menu and notifications.
+2. Tray actions, minimize/restore, quit/relaunch and no orphan helper/occupied port.
+3. Explorer restart, sleep/resume and lock/unlock.
+4. Multiple monitors, negative coordinates, portrait and mixed DPI. Physical virtual-screen geometry is implemented but these arrangements are unverified.
+5. Target GPU video/animation, audible local playback, seeking and queue advancement while attached.
+6. Real Spotify login/reconnect and controls on an active device. Register `http://127.0.0.1:4173/callback`; SDK DRM support remains separate.
+7. Installer install/update/uninstall and profile retention. Installer is unsigned; no publisher identity is invented.
+
+References: [Microsoft SetParent](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setparent), [Windows 11 raised desktop discussion](https://github.com/rocksdanister/lively/discussions/3004).
