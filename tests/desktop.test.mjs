@@ -152,4 +152,5 @@ it('wires the Windows desktop host and a return-to-window control path', async (
   expect(host).toContain('SHELLDLL_DefView')
   expect(host).toContain('[MusicWallDesktop]::SetParent')
   expect(host).toContain('[MusicWallDesktop]::GetSystemMetrics(78)')
+  expect(host).not.toContain('$host = Get-DesktopHost')
 })
