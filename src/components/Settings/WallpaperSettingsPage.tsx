@@ -2,6 +2,7 @@ import type { VisualSource, Track } from '../../types/music'
 import type { WallpaperPreset, WallpaperSettings } from '../../types/interfaceSettings'
 import type { CustomWallpaper } from '../../hooks/useInterfaceSettings'
 import { RangeSetting, Setting } from './SettingsField'
+import { WallpaperSettingsPreview } from './WallpaperSettingsPreview'
 
 type Update = <K extends keyof WallpaperSettings>(key: K, value: WallpaperSettings[K]) => void
 interface Props {
@@ -18,8 +19,8 @@ interface Props {
 }
 
 export function WallpaperSettingsPage({ settings, onChange, onPreset, currentVisual, customWallpaper, error, onUpload, onRemove, spotifyTrack, onSetVisual }: Props) {
-  const preview = customWallpaper ?? (currentVisual.kind === 'image' ? { url: currentVisual.src, kind: 'image' as const, name: 'Current wallpaper' } : { url: currentVisual.src, kind: 'video' as const, name: 'Current video' })
   return <>
+    <WallpaperSettingsPreview key={`${currentVisual.kind}:${currentVisual.src}`} visual={currentVisual} settings={settings} />
     <section className="settings-section"><h3>Background Source</h3>
       <Setting label="Background Mode"><select value={settings.backgroundMode} onChange={(event) => { onChange('backgroundMode', event.target.value as WallpaperSettings['backgroundMode']); onChange('source', 'current') }}><option value="auto">Auto</option><option value="album-art">Album Art</option><option value="track-visual">Track Visual</option></select></Setting>
       <p className="settings-note">Auto uses the saved track visual, then album artwork. Track Visual falls back to artwork when none is saved.</p>
@@ -51,8 +52,7 @@ export function WallpaperSettingsPage({ settings, onChange, onPreset, currentVis
       {settings.position === 'custom' && <><RangeSetting label="Horizontal" value={settings.customX} unit="%" min={0} max={100} onChange={(value) => onChange('customX', value)} /><RangeSetting label="Vertical" value={settings.customY} unit="%" min={0} max={100} onChange={(value) => onChange('customY', value)} /></>}
     </section>
     <section className="settings-section"><h3>Custom Wallpaper</h3>
-      <div className="settings-wallpaper-preview" aria-label="Wallpaper preview">{preview.kind === 'video' ? <video src={preview.url} muted autoPlay loop playsInline /> : <img src={preview.url} alt="Wallpaper preview" />}</div>
-      <p className="settings-note">{preview.name}</p>
+      {customWallpaper && <p className="settings-note">{customWallpaper.name}</p>}
       <label className="settings-upload">Upload image or video<input type="file" accept="image/*,video/*" onChange={(event) => { const file = event.target.files?.[0]; if (file) void onUpload(file); event.target.value = '' }} /></label>
       {customWallpaper && <div className="settings-wallpaper-actions"><button onClick={() => onChange('source', 'custom')}>Apply custom wallpaper</button><button onClick={() => { void onRemove() }}>Remove</button></div>}
       {error && <p className="settings-note" role="alert">{error}</p>}

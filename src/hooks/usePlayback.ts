@@ -3,6 +3,13 @@ import { mockTracks } from '../data/mockTrack'
 import { playerStore } from '../store/playerStore'
 import { useSpotify } from './useSpotify'
 
+function reportLocalPlayError(error: unknown, trackId: string | undefined) {
+  // Source changes intentionally interrupt play(); a stale promise must not pause the new track.
+  if (error instanceof DOMException && error.name === 'AbortError') return
+  const current = playerStore.getSnapshot()
+  if (current.source === 'local' && current.localTrack?.id === trackId) playerStore.setLocalPlaybackError('This audio file could not be played in this browser.')
+}
+
 export function usePlayback() {
   const state = useSyncExternalStore(playerStore.subscribe, playerStore.getSnapshot, playerStore.getSnapshot)
   const spotify = useSpotify()
@@ -15,7 +22,7 @@ export function usePlayback() {
   useEffect(() => () => {
     if (seekTimer.current !== null) window.clearTimeout(seekTimer.current)
     if (volumeTimer.current !== null) window.clearTimeout(volumeTimer.current)
-  }, [state.source])
+  }, [state.source, state.spotifyTrack?.id])
 
   useEffect(() => {
     if (!state.isPlaying || state.source === 'local') return
@@ -44,7 +51,7 @@ export function usePlayback() {
     audio.volume = state.volume
     audio.muted = state.isMuted
     audio.load()
-    if (state.isPlaying) void audio.play().catch(() => playerStore.setLocalPlaybackError('This audio file could not be played in this browser.'))
+    if (state.isPlaying) void audio.play().catch((error) => reportLocalPlayError(error, track.id))
     return () => {
       audio.pause()
       audio.removeAttribute('src')
@@ -62,7 +69,7 @@ export function usePlayback() {
   useEffect(() => {
     const audio = localAudio.current
     if (!audio || state.source !== 'local') return
-    if (state.isPlaying) void audio.play().catch(() => playerStore.setLocalPlaybackError('This audio file could not be played in this browser.'))
+    if (state.isPlaying) void audio.play().catch((error) => reportLocalPlayError(error, state.localTrack?.id))
     else audio.pause()
   }, [state.source, state.isPlaying])
 
@@ -94,7 +101,7 @@ export function usePlayback() {
       if (state.isPlaying) { localAudio.current?.pause(); playerStore.pause() }
       else {
         const audio = localAudio.current
-        if (audio) void audio.play().catch(() => playerStore.setLocalPlaybackError('This audio file could not be played in this browser.'))
+        if (audio) void audio.play().catch((error) => reportLocalPlayError(error, state.localTrack?.id))
         playerStore.play()
       }
     }
@@ -110,16 +117,28 @@ export function usePlayback() {
         }
       })
     }
-  }, [state.source, state.isPlaying, spotify.command])
+  }, [state.source, state.isPlaying, state.localTrack?.id, spotify.command])
   const previous = useCallback(() => {
-    if (state.source !== 'spotify') playerStore.previous()
+    if (state.source !== 'spotify') {
+      const before = playerStore.getSnapshot()
+      playerStore.previous()
+      // Restarting the current local track does not reload its source effect.
+      if (before.source === 'local' && before.localTrack?.id === playerStore.getSnapshot().localTrack?.id && localAudio.current) {
+        localAudio.current.currentTime = 0
+      }
+    }
     else void spotify.command('previous')
   }, [state.source, spotify.command])
   const next = useCallback(() => {
-    if (state.source !== 'spotify') playerStore.next()
+    if (state.source !== 'spotify') {
+      const before = playerStore.getSnapshot()
+      playerStore.next()
+      if (before.source === 'local' && before.localTrack?.id === playerStore.getSnapshot().localTrack?.id && localAudio.current) localAudio.current.currentTime = 0
+    }
     else void spotify.command('next')
   }, [state.source, spotify.command])
   const seek = useCallback((time: number) => {
+    if (!Number.isFinite(time)) return
     if (state.source === 'mock') playerStore.seek(time)
     else if (state.source === 'local') {
       const audio = localAudio.current
@@ -133,6 +152,7 @@ export function usePlayback() {
     }
   }, [state.source, state.localTrack?.duration, spotify.command])
   const setVolume = useCallback((volume: number) => {
+    if (!Number.isFinite(volume)) return
     if (state.source !== 'spotify') playerStore.setVolume(volume)
     else {
       playerStore.setVolume(volume)

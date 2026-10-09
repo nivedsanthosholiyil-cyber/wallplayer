@@ -90,6 +90,31 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+it.each(['seek', 'volume'] as const)('does not apply a late Spotify %s result to local playback', async (action) => {
+  const { useSpotify } = await import('../src/hooks/useSpotify')
+  const { spotifyPlayback, toMusicWallTrack } = await import('../src/services/spotify/playback')
+  const { playerStore } = await import('../src/store/playerStore')
+  playerStore.useMock()
+  let finish!: () => void
+  vi.mocked(action === 'seek' ? spotifyPlayback.seek : spotifyPlayback.setVolume).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
+  let spotify!: ReturnType<typeof useSpotify>
+  function Probe() { spotify = useSpotify(); return null }
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  try {
+    await act(async () => { root.render(createElement(Probe)) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    let request!: Promise<boolean>
+    await act(async () => { request = spotify.command(action, action === 'seek' ? 40 : .9) })
+    const local = { ...toMusicWallTrack((await mocks.getCurrent()).playback), id: 'local-race', audioSrc: 'blob:local-race' }
+    await act(async () => { playerStore.selectLocalTrack(local.id, [local]); playerStore.seek(7); playerStore.setVolume(.2); finish(); await request })
+    expect(playerStore.getSnapshot()).toMatchObject({ source: 'local', currentTime: 7, volume: .2 })
+  } finally {
+    await act(async () => { root.unmount() })
+    container.remove()
+  }
+})
+
 it('polls Spotify while mounted, updates the player store, and stops after unmount', async () => {
   const { useSpotify } = await import('../src/hooks/useSpotify')
   const { playerStore } = await import('../src/store/playerStore')

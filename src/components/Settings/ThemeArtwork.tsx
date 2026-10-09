@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { ArrowLeft, Expand, ListMusic, Pause, Play, Repeat2, Search, Settings2, Shuffle, SkipBack, SkipForward, Volume2, VolumeX, X, TextQuote } from 'lucide-react'
 import { themes, type ThemeAsset, type ThemeControl } from '../../data/themes'
 import type { UiTheme } from '../../types/interfaceSettings'
+import { HelloKittyArtwork, KittyBow } from './HelloKittyArtwork'
 
 const fallbackIcons: Record<ThemeControl, typeof Play> = {
   play: Play, pause: Pause, previous: SkipBack, next: SkipForward, volume: Volume2, settings: Settings2,
@@ -11,6 +12,7 @@ const fallbackIcons: Record<ThemeControl, typeof Play> = {
 function pathFor(asset: ThemeAsset): ReactNode {
   if (asset.type === 'image') return <image href={asset.src} x="4" y="4" width="40" height="40" preserveAspectRatio="xMidYMid meet" />
   const id = asset.id
+  if (id === 'hello-kitty-previous' || id === 'hello-kitty-next') return <KittyBow direction={id === 'hello-kitty-previous' ? 'previous' : 'next'} />
   if (id === 'batman-silhouette') return <path className="theme-art__bat-emblem" d="M3 22 10 15 17 18 24 11 31 18 38 15 45 22 41 32 35 27 30 35 24 30 18 35 13 27 7 32Z" />
   if (id === 'batman-signal') return <><circle cx="24" cy="24" r="19" fill="none" stroke="currentColor" strokeWidth="1.3" /><path d="M4 24h10m20 0h10M24 4v9m0 22v9" stroke="currentColor" strokeWidth="1.3" /><path d="M9 24 15 18l5 3 4-6 4 6 5-3 6 6-3 8-5-4-3 5-4-3-4 3-3-5-5 4Z" /></>
   if (id === 'spider-emblem') return <><path d="M24 7v34M8 13l32 22M40 13 8 35M13 24h22M17 15l14 18M31 15 17 33" fill="none" stroke="currentColor" strokeWidth="2.2" /><ellipse cx="24" cy="24" rx="6" ry="9" /><path d="m19 20-6-4m16 4 6-4m-16 11-6 5m16-5 6 5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" /></>
@@ -64,6 +66,7 @@ function controlGlyph(id: string, y = 0): ReactNode {
 }
 
 export function ThemeArtwork({ asset, theme, className = '', size = 24, playing, muted }: { asset: ThemeAsset; theme: UiTheme; className?: string; size?: number; playing?: boolean; muted?: boolean }) {
+  if (asset.type === 'vector' && asset.id === 'hello-kitty-face') return <HelloKittyArtwork size={size} playing={playing} className={className} />
   if (asset.type === 'image' && asset.playingSrc) return <span className={`theme-art-image theme-art-image--state ${className}`} data-playing={Boolean(playing)} style={{ width: size, height: size }} aria-hidden="true">
     <img className="theme-art-image__paused" src={asset.src} alt="" />
     <img className="theme-art-image__playing" src={asset.playingSrc} alt="" />

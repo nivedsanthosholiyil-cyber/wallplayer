@@ -22,6 +22,23 @@ afterEach(() => {
 })
 
 describe('Spotify PKCE callback', () => {
+  it('accepts a desktop relay at the root while keeping the registered callback for exchange', async () => {
+    vi.stubEnv('VITE_SPOTIFY_REDIRECT_URI', 'http://127.0.0.1:4173/callback')
+    sessionStorage.setItem(transactionKey, JSON.stringify({ verifier: 'desktop-verifier', state: 'desktop-state', createdAt: Date.now() }))
+    window.history.replaceState(null, '', '/?code=desktop-code&state=desktop-state')
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ access_token: 'unit-test-token', refresh_token: 'unit-test-refresh', expires_in: 3600 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { spotifyAuth } = await import('../src/services/spotify/auth')
+    await spotifyAuth.completeRedirect()
+    const body = fetchMock.mock.calls[0][1].body as URLSearchParams
+    expect(body.get('redirect_uri')).toBe('http://127.0.0.1:4173/callback')
+    expect(body.get('code_verifier')).toBe('desktop-verifier')
+    expect(body.has('client_secret')).toBe(false)
+    expect(spotifyAuth.getSnapshot().status).toBe('connected')
+    expect(sessionStorage.getItem(transactionKey)).toBeNull()
+    expect(window.location.search).toBe('')
+  })
+
   it('does not reuse tokens issued to a different Spotify app', async () => {
     sessionStorage.setItem('musicwall.spotify.tokens.v1', JSON.stringify({ clientId: 'other-app', accessToken: 'old-token', refreshToken: 'old-refresh', expiresAt: Date.now() + 3600_000, scope: 'user-read-playback-state' }))
     const { spotifyAuth } = await import('../src/services/spotify/auth')

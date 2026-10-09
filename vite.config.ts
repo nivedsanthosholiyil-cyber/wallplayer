@@ -2,27 +2,11 @@ import { defineConfig, loadEnv, type Plugin, type ViteDevServer, type PreviewSer
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createVisualsHandler } from './server/visuals.mjs'
+import { createLyricsHandler } from './server/lyrics.mjs'
 
 function lyricsProxy(apiUrl: string, apiKey: string): Plugin {
   const install = (server: ViteDevServer | PreviewServer) => {
-    server.middlewares.use('/api/lyrics', async (request, response, next) => {
-      const query = new URL(request.url || '/', 'http://localhost')
-      if (!['/get', '/search'].includes(query.pathname)) return next()
-      if (request.method !== 'GET') { response.statusCode = 405; response.end(); return }
-      const upstream = new URL(`${apiUrl.replace(/\/$/, '')}${query.pathname}`)
-      for (const key of ['artist_name', 'track_name', 'album_name', 'duration']) {
-        upstream.searchParams.set(key, (query.searchParams.get(key) || '').slice(0, 500))
-      }
-      try {
-        const result = await fetch(upstream, { headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(10000) })
-        response.statusCode = result.status
-        response.setHeader('Content-Type', 'application/json')
-        response.end(await result.text())
-      } catch {
-        response.statusCode = 502
-        response.end(JSON.stringify({ error: 'Lyrics provider unavailable' }))
-      }
-    })
+    server.middlewares.use('/api/lyrics', createLyricsHandler({ apiUrl, apiKey }))
   }
   return { name: 'lyrics-server-proxy', configureServer: install, configurePreviewServer: install }
 }
@@ -37,8 +21,14 @@ function visualsServer(apiKey: string, directory?: string): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const serverProvider = Boolean(env.LYRICS_API_URL)
+  const desktop = mode === 'desktop'
   return {
     plugins: [react(), tailwindcss(), visualsServer(env.PEXELS_API_KEY, env.MUSICWALL_VISUALS_DIR || undefined), ...(serverProvider ? [lyricsProxy(env.LYRICS_API_URL, env.LYRICS_API_KEY || '')] : [])],
-    ...(serverProvider ? { define: { 'import.meta.env.VITE_LYRICS_API_URL': JSON.stringify('/api/lyrics') } } : {}),
+    ...(desktop ? { build: { outDir: 'dist-desktop' } } : {}),
+    define: {
+      ...(serverProvider || desktop ? { 'import.meta.env.VITE_LYRICS_API_URL': JSON.stringify('/api/lyrics') } : {}),
+      // Desktop must not inherit a developer's port-5173 callback from .env.local.
+      ...(desktop ? { 'import.meta.env.VITE_SPOTIFY_REDIRECT_URI': JSON.stringify('http://127.0.0.1:4173/callback') } : {}),
+    },
   }
 })

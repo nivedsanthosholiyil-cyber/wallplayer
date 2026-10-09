@@ -15,12 +15,39 @@ vi.mock('../src/services/localMusic/localMusic', () => ({
 }))
 
 import { useLocalMusic } from '../src/hooks/useLocalMusic'
+import { playerStore } from '../src/store/playerStore'
+;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(() => {
   mocks.list.mockClear().mockResolvedValue([])
   mocks.save.mockClear().mockResolvedValue('saved')
   mocks.describe.mockClear()
   vi.restoreAllMocks()
+  playerStore.useMock()
+})
+
+it('replaces the active queue source when a local file is relinked', async () => {
+  const createUrl = vi.fn().mockReturnValueOnce('blob:original').mockReturnValueOnce('blob:replacement')
+  const revokeUrl = vi.fn()
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createUrl })
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeUrl })
+  const file = new File(['old audio'], 'old.mp3', { type: 'audio/mpeg' })
+  mocks.list.mockResolvedValue([{ id: 'relink', file, fileName: file.name, title: 'Old track', artist: 'Artist', album: 'Album', duration: 42, mimeType: file.type, addedAt: 0 }])
+  let library!: ReturnType<typeof useLocalMusic>
+  function Probe() { library = useLocalMusic(); return null }
+  const container = document.createElement('div'); document.body.append(container)
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(createElement(Probe)))
+    playerStore.selectLocalTrack('local-relink', library.tracks)
+    playerStore.seek(10)
+    playerStore.pause()
+    const replacement = new File(['new audio'], 'replacement.mp3', { type: 'audio/mpeg' })
+    await act(async () => { await library.relinkFile('local-relink', replacement) })
+    expect(library.tracks[0].audioSrc).toBe('blob:replacement')
+    expect(playerStore.getSnapshot()).toMatchObject({ localTrack: { audioSrc: 'blob:replacement' }, localQueue: [{ audioSrc: 'blob:replacement' }], isPlaying: false, currentTime: 0 })
+    expect(revokeUrl).toHaveBeenCalledWith('blob:original')
+  } finally { await act(async () => root.unmount()); container.remove() }
 })
 
 it('keeps imported file data local and revokes its playback URL when the library unmounts', async () => {

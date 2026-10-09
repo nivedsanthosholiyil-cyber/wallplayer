@@ -186,8 +186,16 @@ export function useSpotify() {
       if (action === 'pause') await spotifyPlayback.pause()
       if (action === 'previous') await spotifyPlayback.previous()
       if (action === 'next') await spotifyPlayback.next()
-      if (action === 'seek') { await spotifyPlayback.seek(value ?? 0); playerStore.seek(value ?? 0) }
-      if (action === 'volume') { await spotifyPlayback.setVolume(value ?? 0); playerStore.setVolume(value ?? 0) }
+      if (action === 'seek') {
+        await spotifyPlayback.seek(value ?? 0)
+        // usePlayback already moved the shared position at input time. Reapplying
+        // an old request here would rewind progress after a newer seek or elapsed time.
+      }
+      if (action === 'volume') {
+        await spotifyPlayback.setVolume(value ?? 0)
+        const latest = playerStore.getSnapshot()
+        if (latest.source === 'spotify' && latest.volume === current.volume && latest.isMuted === current.isMuted) playerStore.setVolume(value ?? 0)
+      }
       scheduleRefresh.current?.(800)
       return true
     } catch (error) {
@@ -201,7 +209,14 @@ export function useSpotify() {
   }, [])
 
   const command = useCallback((action: SpotifyCommand, value?: number) => {
-    const task = commandQueue.current.then(() => executeCommand(action, value))
+    const requestedTrack = playerStore.getSnapshot().spotifyTrack?.id
+    const task = commandQueue.current.then(() => {
+      const latest = playerStore.getSnapshot()
+      // A queued slider request belongs to the provider/track that received the input.
+      if ((action === 'seek' || action === 'volume') && latest.source !== 'spotify') return false
+      if (action === 'seek' && latest.spotifyTrack?.id !== requestedTrack) return false
+      return executeCommand(action, value)
+    })
     commandQueue.current = task.catch(() => {})
     return task
   }, [executeCommand])

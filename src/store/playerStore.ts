@@ -65,7 +65,9 @@ export const playerStore = {
   },
   updateLocalLibraryTrack(track: Track) {
     if (state.source !== 'local') return
-    setState({ localQueue: state.localQueue.map((entry) => entry.id === track.id ? track : entry), ...(state.localTrack?.id === track.id ? { localTrack: track } : {}) })
+    const active = state.localTrack?.id === track.id
+    const replacedAudio = active && state.localTrack?.audioSrc !== track.audioSrc
+    setState({ localQueue: state.localQueue.map((entry) => entry.id === track.id ? track : entry), ...(active ? { localTrack: track } : {}), ...(replacedAudio ? { currentTime: 0, status: 'ready', message: '' } : {}) })
   },
   removeLocalLibraryTrack(trackId: string) {
     if (state.source !== 'local') return
@@ -104,6 +106,7 @@ export const playerStore = {
   pause: () => setState({ isPlaying: false }),
   togglePlay: () => setState({ isPlaying: !state.isPlaying }),
   seek(time: number) {
+    if (!Number.isFinite(time)) return
     const duration = state.source === 'spotify' ? state.spotifyTrack?.duration ?? 0 : state.source === 'local' ? state.localTrack?.duration ?? 0 : mockTracks[state.trackIndex].duration
     setState({ currentTime: Math.min(duration, Math.max(0, time)) })
   },
@@ -150,6 +153,7 @@ export const playerStore = {
     else setState({ trackIndex: (state.trackIndex - 1 + mockTracks.length) % mockTracks.length, currentTime: 0 })
   },
   setVolume(volume: number) {
+    if (!Number.isFinite(volume)) return
     const nextVolume = Math.min(1, Math.max(0, volume))
     setState({ volume: nextVolume, isMuted: nextVolume === 0 })
   },

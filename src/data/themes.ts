@@ -31,6 +31,7 @@ export interface ThemeAssets {
   logo: ThemeAsset
   controls: Record<ThemeControl, ThemeAsset>
   decorations: ThemeAsset[]
+  panelBackgrounds?: { library: string; settings: string }
 }
 
 function vector(id: string): ThemeAsset { return { type: 'vector', id } }
@@ -55,13 +56,13 @@ export const themes: Record<UiTheme, ThemeConfig> = {
   'spider-man': {
     id: 'spider-man', name: 'Spider-Man', colors: { background: '9 10 16', surface: '20 14 23', surfaceElevated: '43 24 37', accent: '207 75 83', accentSecondary: '74 121 178', text: '247 241 243', textMuted: '207 192 202', border: '208 145 155', glow: '208 70 79', control: '247 233 237' },
     preview: 'linear-gradient(140deg, #641d2b, #121520 62%, #183959)', controlStyle: 'web', progressStyle: 'pulse', radius: 8, logo: 'web', decorativeStyle: 'web', uiFont: 'Inter, ui-sans-serif, sans-serif', assets: themeAssets('spider-man', 'spider-emblem', ['web-corner'], {
-      play: { type: 'image', src: '/themes/spider-man/mask-paused.png', playingSrc: '/themes/spider-man/mask-playing.png' },
-      pause: { type: 'image', src: '/themes/spider-man/mask-paused.png', playingSrc: '/themes/spider-man/mask-playing.png' },
+      play: { type: 'image', src: '/themes/spider-man/mask-paused.svg', playingSrc: '/themes/spider-man/mask-playing.svg' },
+      pause: { type: 'image', src: '/themes/spider-man/mask-paused.svg', playingSrc: '/themes/spider-man/mask-playing.svg' },
     }),
   },
   'hello-kitty': {
-    id: 'hello-kitty', name: 'Hello Kitty', colors: { background: '30 19 30', surface: '46 27 42', surfaceElevated: '68 39 59', accent: '245 174 199', accentSecondary: '227 115 139', text: '255 247 249', textMuted: '240 211 224', border: '245 196 216', glow: '248 172 201', control: '255 242 248' },
-    preview: 'linear-gradient(145deg, #b2698f, #4b293e 62%, #f2b6cc)', controlStyle: 'soft', progressStyle: 'soft', radius: 18, logo: 'bow', decorativeStyle: 'bow', uiFont: '"Nunito Variable", Inter, sans-serif', assets: themeAssets('hello-kitty', 'cute-bow-face', ['tiny-bow']),
+    id: 'hello-kitty', name: 'Sanrio', colors: { background: '30 19 30', surface: '46 27 42', surfaceElevated: '68 39 59', accent: '245 174 199', accentSecondary: '227 115 139', text: '255 247 249', textMuted: '240 211 224', border: '245 196 216', glow: '248 172 201', control: '255 242 248' },
+    preview: 'linear-gradient(145deg, #b2698f, #4b293e 62%, #f2b6cc)', controlStyle: 'soft', progressStyle: 'soft', radius: 18, logo: 'bow', decorativeStyle: 'bow', uiFont: '"Nunito Variable", Inter, sans-serif', assets: { ...themeAssets('hello-kitty', 'cute-bow-face', ['tiny-bow'], { play: vector('hello-kitty-face'), pause: vector('hello-kitty-face'), previous: { type: 'image', src: '/themes/hello-kitty/bow-thumb.svg' }, next: { type: 'image', src: '/themes/hello-kitty/sanrio-next-skull-bow.png' } }), panelBackgrounds: { library: '/themes/hello-kitty/hello-kitty-library.jpeg', settings: '/themes/hello-kitty/hello-kitty-settings.jpeg' } },
   },
   sonic: {
     id: 'sonic', name: 'Sonic', colors: { background: '5 17 38', surface: '8 27 56', surfaceElevated: '17 51 87', accent: '86 202 245', accentSecondary: '225 191 91', text: '241 249 255', textMuted: '193 219 239', border: '149 207 242', glow: '68 192 255', control: '231 247 255' },

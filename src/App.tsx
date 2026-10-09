@@ -87,10 +87,10 @@ function App() {
       {appearance.showLogo && <div className={`app-brand app-brand--${appearance.logoPosition} app-brand--${appearance.logoStyle}`} style={{ fontSize: appearance.logoSize, opacity: appearance.logoOpacity / 100 }} aria-label="MusicWall"><ThemeMark theme={appearance.theme} />{appearance.logoStyle !== 'symbol' && <span>{appearance.logoStyle === 'monogram' ? 'MW' : 'MusicWall'}</span>}</div>}
       <button className="settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Open settings" title="Settings"><ThemeGlyph theme={appearance.theme} name="settings" size={18} /></button>
       <main className={`app-main app-main--${preferences.position}`} data-library-open={browserOpen} data-settings-open={settingsOpen}>
-        {player.source === 'spotify' && player.track && <TrackMetadata track={player.track}>
+        {player.source !== 'mock' && player.track && <TrackMetadata track={player.track}>
           {player.track.artwork && <img src={player.track.artwork} alt={`${player.track.album || player.track.title} artwork`} />}
-          <div><span>{player.track.title}</span><small>{player.track.artist}</small></div>
-          <TrackVisualMenu track={player.track} onSetVisual={openVisual} />
+          <div className="spotify-track-meta__text"><span title={player.track.title}>{player.track.title}</span><small title={player.track.artist}>{player.track.artist}</small></div>
+          {player.source === 'spotify' && <TrackVisualMenu track={player.track} onSetVisual={openVisual} />}
         </TrackMetadata>}
         {!portableOpen && (player.track?.lyrics.length
           ? <LyricsDisplay track={player.track} lyricsState={lyricsState} preferences={preferences} isPlaying={player.isPlaying} currentTime={player.currentTime} />
@@ -114,6 +114,7 @@ function App() {
         onNext={player.next}
         onSeek={player.seek}
         appearance={appearance}
+        message={player.status === 'error' || player.status === 'unavailable' || player.status === 'expired' ? player.message : ''}
       />
       <Suspense fallback={null}><MusicBrowser
         open={browserOpen}
@@ -150,7 +151,7 @@ function App() {
         onAppearanceChange={interfaceSettings.updateAppearance}
         onWallpaperChange={interfaceSettings.updateWallpaper}
         onWallpaperPreset={interfaceSettings.selectWallpaperPreset}
-        currentVisual={currentVisual}
+        currentVisual={visual}
         customWallpaper={customWallpaper}
         wallpaperError={interfaceSettings.wallpaperError}
         onUploadWallpaper={interfaceSettings.uploadWallpaper}

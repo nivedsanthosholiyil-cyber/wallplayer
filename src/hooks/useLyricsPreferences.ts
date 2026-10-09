@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { defaultPreferences, type LyricPreferences } from '../types/preferences'
 import { defaultLyricStyle, presetValues } from '../data/lyricStyles'
+import { restoreLyricPreferences } from '../data/settingsValidation'
 
 const storageKey = 'musicwall.lyrics.preferences.v2'
 const legacyKey = 'musicwall.lyrics.preferences.v1'
@@ -9,14 +10,13 @@ function loadPreferences(): LyricPreferences {
   try {
     const saved = localStorage.getItem(storageKey)
     if (saved) {
-      const parsed = JSON.parse(saved) as Partial<LyricPreferences>
-      return { ...defaultPreferences, ...parsed, style: { ...defaultLyricStyle, ...parsed.style }, singerStyles: parsed.singerStyles ?? {} }
+      return restoreLyricPreferences(JSON.parse(saved))
     }
     const legacy = localStorage.getItem(legacyKey)
     if (!legacy) return defaultPreferences
     const parsed = JSON.parse(legacy) as Record<string, unknown>
     const preset = parsed.fontStyle === 'serif' ? 'editorial' : 'cinematic'
-    return {
+    return restoreLyricPreferences({
       ...defaultPreferences,
       layout: (parsed.layout as LyricPreferences['layout']) ?? defaultPreferences.layout,
       style: {
@@ -37,7 +37,7 @@ function loadPreferences(): LyricPreferences {
       portableLayout: (parsed.portableLayout as LyricPreferences['portableLayout']) ?? defaultPreferences.portableLayout,
       portableWidth: typeof parsed.portableWidth === 'number' ? parsed.portableWidth : defaultPreferences.portableWidth,
       portableOpacity: typeof parsed.portableOpacity === 'number' ? parsed.portableOpacity : defaultPreferences.portableOpacity,
-    }
+    })
   } catch { return defaultPreferences }
 }
 

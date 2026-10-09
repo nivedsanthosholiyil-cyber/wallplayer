@@ -1,0 +1,34 @@
+/* Sanrio skin: interface surfaces only; wallpaper and lyric styling are independent. */
+.app-shell[data-ui-theme="hello-kitty"] .kitty-face { filter: drop-shadow(0 1px 1px #241222a0); }
+.app-shell[data-ui-theme="hello-kitty"] .player-controls__play { background: transparent; box-shadow: none; }
+.app-shell[data-ui-theme="hello-kitty"] .player-controls__play .kitty-face { width: calc(46px * var(--icon-scale, 1)); height: calc(36px * var(--icon-scale, 1)); }
+.app-shell[data-ui-theme="hello-kitty"] .kitty-bow__ribbon { fill: #f3a6c5; stroke: #fff1f5; }
+.app-shell[data-ui-theme="hello-kitty"] .kitty-bow__knot { fill: #d95c8d; }
+.app-shell[data-ui-theme="hello-kitty"] .player-controls__range::-webkit-slider-thumb { width: 26px; height: 14px; margin-top: calc((var(--progress-thickness, 2px) - 14px) / 2); border-radius: 0; background: url('/themes/hello-kitty/sanrio-progress-bow.png') center / contain no-repeat; box-shadow: none; filter: drop-shadow(0 0 .6px #fff1f580); }
+.app-shell[data-ui-theme="hello-kitty"] .player-controls__range::-moz-range-thumb { width: 26px; height: 14px; border: 0; border-radius: 0; background: url('/themes/hello-kitty/sanrio-progress-bow.png') center / contain no-repeat; box-shadow: none; }
+.app-shell[data-ui-theme="hello-kitty"] .player-controls__volume-range::-webkit-slider-thumb { width: 12px; height: 10px; margin-top: -4px; border-radius: 0; background: url('/themes/hello-kitty/bow-thumb.svg') center / contain no-repeat; box-shadow: none; }
+.app-shell[data-ui-theme="hello-kitty"] .player-controls__volume-range::-moz-range-thumb { width: 12px; height: 10px; border: 0; border-radius: 0; background: url('/themes/hello-kitty/bow-thumb.svg') center / contain no-repeat; box-shadow: none; }
+.app-shell[data-ui-theme="hello-kitty"] :is(.settings-panel, .music-browser, .visual-panel) { background-color: rgb(var(--theme-surface) / var(--ui-alpha, .88)); background-image: linear-gradient(145deg, #ffeef70d, transparent 50%, #f3a6c50a); box-shadow: 0 18px 65px #140b1880, inset 0 0 0 1px #ffeaf514; }
+.app-shell[data-ui-theme="hello-kitty"] .music-browser { background-image: linear-gradient(180deg, #291722b8, #291722b0), var(--theme-library-art); background-size: cover; background-position: center; }
+.app-shell[data-ui-theme="hello-kitty"] .settings-panel { background-image: linear-gradient(180deg, #291722b8, #291722b0), var(--theme-settings-art); background-size: cover; background-position: center 58%; }
+.app-shell[data-ui-theme="hello-kitty"] :is(.settings-panel__header, .settings-tabs) { background-color: #291722eb; }
+.app-shell[data-ui-theme="hello-kitty"] :is(.music-browser__top, .music-browser__section, .music-browser__local-section, .settings-section) { background-color: #29172240; }
+.app-shell[data-ui-theme="hello-kitty"] :is(.music-browser__track-text, .music-browser__tile-caption, .settings-field__heading, .settings-toggle, .settings-note) { text-shadow: 0 1px 3px #291722c0; }
+.app-shell[data-ui-theme="hello-kitty"] .settings-panel :is(select, .settings-text-input) { background-color: #291722b3; }
+.app-shell[data-ui-theme="hello-kitty"] .settings-panel :is(.settings-note, .settings-field__heading span:last-child, .settings-style-preview-wrap > span) { color: rgb(var(--theme-muted) / .85); }
+.app-shell[data-ui-theme="hello-kitty"] :is(.settings-panel__header, .settings-tabs) { background-image: repeating-linear-gradient(90deg, #fff0f603 0 8px, transparent 8px 16px); }
+.app-shell[data-ui-theme="hello-kitty"] :is(.music-browser__search, .settings-field select, .settings-text-input, .visual-panel input, .visual-panel select) { background-color: #ffe7f20d; border-color: #edb7ce40; color: rgb(var(--theme-text)); }
+.app-shell[data-ui-theme="hello-kitty"] :is(input, select)::placeholder { color: rgb(var(--theme-muted) / .6); }
+.app-shell[data-ui-theme="hello-kitty"] :is(.music-browser__tile, .music-browser__art-button) { border-radius: var(--ui-radius); }
+.app-shell[data-ui-theme="hello-kitty"] :is(.music-browser__track[data-active="true"], .music-browser__track:hover, .music-browser__local-row[data-active="true"]) { background: #f3a6c51a; box-shadow: inset 2px 0 #f3a6c5; }
+.app-shell[data-ui-theme="hello-kitty"] :is(.music-browser__track-menu, .track-visual-menu [role="menu"]) { background: rgb(var(--theme-elevated) / .97); border: 1px solid #f3a6c526; color: rgb(var(--theme-text)); }
+.app-shell[data-ui-theme="hello-kitty"] :is(.track-visual-menu [role="menuitem"], .visual-panel, .visual-panel input, .visual-panel select) { color: rgb(var(--theme-text)); font-family: var(--theme-font); }
+.app-shell[data-ui-theme="hello-kitty"] :is(.track-visual-menu [role="menuitem"]:hover, .visual-panel button:hover, .music-browser__track-menu button:hover) { background: #f3a6c51f; }
+.app-shell[data-ui-theme="hello-kitty"] :is(.music-browser__empty, .music-browser__section-note, .visual-panel header p, .visual-panel footer, .visual-panel [role="status"]) { color: rgb(var(--theme-muted) / .72); }
+.app-shell[data-ui-theme="hello-kitty"] :is(.settings-trigger, .music-browser__trigger, .music-browser__close, .settings-panel__close) { color: rgb(var(--theme-accent)); }
+.app-shell[data-ui-theme="hello-kitty"] :is(button, input, select):focus-visible { outline-color: #f3a6c5; }
+.app-shell[data-ui-theme="hello-kitty"] :is(button, input):disabled { filter: saturate(.55); }
+.app-shell[data-ui-theme="hello-kitty"] .transport-button:active { color: #e978a5; }
+.app-shell[data-ui-theme="hello-kitty"] .visual-panel select option { background: rgb(var(--theme-elevated)); }
+
+.app-shell[data-ui-theme="hello-kitty"] .player-controls__transport .transport-button:not(.player-controls__play) .theme-art-image { width: calc(36px * var(--icon-scale, 1)); height: calc(24px * var(--icon-scale, 1)); object-fit: contain; filter: drop-shadow(0 1px 1px #24122280); }

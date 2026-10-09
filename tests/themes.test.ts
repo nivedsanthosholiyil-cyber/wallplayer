@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeTheme, themeList } from '../src/data/themes'
+import { normalizeTheme, themeList, themes } from '../src/data/themes'
 
 function luminance(rgb: string) {
   const values = rgb.split(' ').map((part) => Number(part) / 255)
@@ -8,6 +8,11 @@ function luminance(rgb: string) {
 }
 
 describe('interface themes', () => {
+  it('restores saved Hello Kitty selections as the renamed Sanrio theme', () => {
+    const restored = themes[normalizeTheme('hello-kitty')]
+    expect(restored.name).toBe('Sanrio')
+    expect(themeList.filter((theme) => theme.name === 'Sanrio')).toHaveLength(1)
+  })
   it('keeps panel text readable in every theme', () => {
     for (const theme of themeList) {
       const surface = luminance(theme.colors.surface)

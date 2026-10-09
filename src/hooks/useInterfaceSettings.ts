@@ -1,15 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { defaultAppearance, defaultWallpaper, wallpaperPresets, type AppearanceSettings, type WallpaperPreset, type WallpaperSettings } from '../types/interfaceSettings'
 import { wallpaperAsset } from '../services/wallpaperAsset'
-import { normalizeTheme } from '../data/themes'
+import { restoreInterfaceSettings } from '../data/settingsValidation'
 
 const KEY = 'musicwall.interface.settings.v1'
 export interface CustomWallpaper { url: string; kind: 'image' | 'video'; name: string }
 
 function loadSettings(): { appearance: AppearanceSettings; wallpaper: WallpaperSettings } {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as { appearance?: Partial<AppearanceSettings>; wallpaper?: Partial<WallpaperSettings> }
-    return { appearance: { ...defaultAppearance, ...saved.appearance, theme: normalizeTheme(saved.appearance?.theme) }, wallpaper: { ...defaultWallpaper, ...saved.wallpaper } }
+    return restoreInterfaceSettings(JSON.parse(localStorage.getItem(KEY) ?? '{}'))
   } catch { return { appearance: defaultAppearance, wallpaper: defaultWallpaper } }
 }
 
@@ -17,21 +16,27 @@ export function useInterfaceSettings() {
   const [settings, setSettings] = useState(loadSettings)
   const [customWallpaper, setCustomWallpaper] = useState<CustomWallpaper | null>(null)
   const [wallpaperError, setWallpaperError] = useState('')
+  const mounted = useRef(false)
 
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(settings)) } catch { /* Settings still work for this session. */ }
   }, [settings])
 
   useEffect(() => {
+    mounted.current = true
     let disposed = false
-    let url: string | null = null
     void wallpaperAsset.get().then((blob) => {
       if (!blob || disposed) return
-      url = URL.createObjectURL(blob)
+      const url = URL.createObjectURL(blob)
       setCustomWallpaper({ url, kind: blob.type.startsWith('video/') ? 'video' : 'image', name: 'Saved wallpaper' })
     }).catch(() => {})
-    return () => { disposed = true; if (url) URL.revokeObjectURL(url) }
+    return () => { disposed = true; mounted.current = false }
   }, [])
+
+  useEffect(() => {
+    const url = customWallpaper?.url
+    return () => { if (url) URL.revokeObjectURL(url) }
+  }, [customWallpaper?.url])
 
   function updateAppearance<K extends keyof AppearanceSettings>(key: K, value: AppearanceSettings[K]) {
     setSettings((current) => ({ ...current, appearance: { ...current.appearance, [key]: value } }))
@@ -49,14 +54,15 @@ export function useInterfaceSettings() {
     }
     try {
       await wallpaperAsset.save(file)
+      if (!mounted.current) return
       const url = URL.createObjectURL(file)
-      setCustomWallpaper((old) => { if (old) URL.revokeObjectURL(old.url); return { url, kind: file.type.startsWith('video/') ? 'video' : 'image', name: file.name } })
+      setCustomWallpaper({ url, kind: file.type.startsWith('video/') ? 'video' : 'image', name: file.name })
       setWallpaperError('')
     } catch { setWallpaperError('This browser could not save the wallpaper locally.') }
   }
   async function removeWallpaper() {
     try { await wallpaperAsset.remove() } catch { setWallpaperError('Could not remove the saved wallpaper.'); return }
-    setCustomWallpaper((old) => { if (old) URL.revokeObjectURL(old.url); return null })
+    setCustomWallpaper(null)
     updateWallpaper('source', 'current')
     setWallpaperError('')
   }

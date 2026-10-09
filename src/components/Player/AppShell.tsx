@@ -29,6 +29,8 @@ function Shell({ children, appearance }: AppShellProps) {
     '--theme-glow': theme.colors.glow,
     '--theme-control': theme.colors.control,
     '--theme-font': theme.uiFont,
+    '--theme-library-art': theme.assets.panelBackgrounds ? `url("${theme.assets.panelBackgrounds.library}")` : 'none',
+    '--theme-settings-art': theme.assets.panelBackgrounds ? `url("${theme.assets.panelBackgrounds.settings}")` : 'none',
     '--ui-alpha': Math.min(.98, (.78 + appearance.glassIntensity / 500) * appearance.uiOpacity / 100),
     '--mobile-ui-alpha': .98 * appearance.uiOpacity / 100,
     '--settings-mobile-alpha': .96 * appearance.uiOpacity / 100,

@@ -23,6 +23,8 @@ export function ThemeGallery({ selected, onSelect }: { selected: UiTheme; onSele
         '--preview-text': theme.colors.text,
         '--preview-glow': theme.colors.glow,
         '--preview-radius': `${theme.radius}px`,
+        '--theme-control': theme.colors.control,
+        '--theme-accent-secondary': theme.colors.accentSecondary,
       } as CSSProperties
       return <motion.button
         key={theme.id}

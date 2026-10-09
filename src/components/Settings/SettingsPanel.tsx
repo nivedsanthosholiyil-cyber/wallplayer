@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { SingerId, VisualSource, Track } from '../../types/music'
 import type { LyricFontFamily, LyricLayout, LyricPreferences, LyricPreset, LyricStyle, PortableLayout } from '../../types/preferences'
-import { effectiveLyricStyle, fontFamilies, lyricPresets, lyricStyleVariables, presetValues } from '../../data/lyricStyles'
+import { effectiveLyricStyle, fontFamilies, lyricPresets, presetValues } from '../../data/lyricStyles'
 import type { AppearanceSettings, WallpaperPreset, WallpaperSettings } from '../../types/interfaceSettings'
 import type { CustomWallpaper } from '../../hooks/useInterfaceSettings'
 import { Setting } from './SettingsField'
@@ -13,6 +13,7 @@ import { ThemeArtwork } from './ThemeArtwork'
 import { themes } from '../../data/themes'
 import { useMotionSettings } from '../../hooks/useMotionSettings'
 import { cinematicNavigation } from '../Player/cinematicNavigation'
+import { LyricSettingsPreview } from './LyricSettingsPreview'
 
 type UpdatePreference = <K extends keyof LyricPreferences>(key: K, value: LyricPreferences[K]) => void
 
@@ -56,6 +57,8 @@ const layouts: { id: LyricLayout; label: string }[] = [
 export function SettingsPanel({ open, preferences, onChange, onClose, portableOpen, onTogglePortable, spotify, playbackMessage, appearance, wallpaper, onAppearanceChange, onWallpaperChange, onWallpaperPreset, currentVisual, customWallpaper, wallpaperError, onUploadWallpaper, onRemoveWallpaper, spotifyTrack, onSetVisual }: SettingsPanelProps) {
   const closeButton = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLElement>(null)
+  const body = useRef<HTMLDivElement>(null)
+  const tabsId = useId()
   const [styleTarget, setStyleTarget] = useState<'all' | SingerId>('all')
   const [page, setPage] = useState<'music' | 'appearance' | 'wallpaper'>('music')
   const movement = useMotionSettings()
@@ -83,11 +86,12 @@ export function SettingsPanel({ open, preferences, onChange, onClose, portableOp
     const pages = ['music', 'appearance', 'wallpaper']
     setDirection(pages.indexOf(next) > pages.indexOf(page) ? 1 : -1)
     setPage(next)
-    panel.current?.scrollTo({ top: 0, behavior: movement.enabled ? 'smooth' : 'instant' })
+    body.current?.scrollTo({ top: 0, behavior: 'instant' })
   }
 
   useEffect(() => {
     if (!open) return
+    const previousFocus = document.activeElement
     closeButton.current?.focus()
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -95,7 +99,7 @@ export function SettingsPanel({ open, preferences, onChange, onClose, portableOp
         return
       }
       if (event.key !== 'Tab' || !panel.current) return
-      const focusable = Array.from(panel.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled])'))
+      const focusable = Array.from(panel.current.querySelectorAll<HTMLElement>('button:not([disabled]):not([tabindex="-1"]), input:not([disabled]), select:not([disabled])'))
       const first = focusable[0]
       const last = focusable[focusable.length - 1]
       if (!first || !last) return
@@ -103,7 +107,7 @@ export function SettingsPanel({ open, preferences, onChange, onClose, portableOp
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
     }
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    return () => { window.removeEventListener('keydown', onKeyDown); if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus() }
   }, [open, onClose])
 
   return (
@@ -111,13 +115,19 @@ export function SettingsPanel({ open, preferences, onChange, onClose, portableOp
       {open && (
         <motion.div className="settings-layer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: navigation.panel + (navigation.moving ? .16 : 0), ease: navigation.ease }}>
           <button className="settings-layer__scrim" onClick={onClose} aria-label="Close settings" tabIndex={-1} />
-          <motion.aside ref={panel} className="settings-panel" role="dialog" aria-modal="true" aria-label="Settings" initial={{ opacity: 0, y: navigation.settingsTravel, scale: navigation.scale, backdropFilter:'blur(0px)' }} animate={{ opacity:1, y:0, scale:1, backdropFilter:`blur(${appearance.blurIntensity}px) saturate(${105 + appearance.glassIntensity / 5}%)` }} exit={{ opacity:0,y:navigation.settingsTravel,scale:navigation.scale,backdropFilter:'blur(0px)',transition:{duration:navigation.panel,delay:navigation.moving ? .16 : 0,ease:navigation.ease} }} transition={{ duration: navigation.panel, ease: navigation.ease }}>
+          <motion.aside ref={panel} className="settings-panel" role="dialog" aria-modal="true" aria-label="Settings" initial={{ opacity: 0, y: navigation.settingsTravel }} animate={{ opacity:1, y:0 }} exit={{ opacity:0,y:navigation.settingsTravel,transition:{duration:navigation.panel,ease:navigation.ease} }} transition={{ duration: navigation.panel, ease: navigation.ease }}>
             <header className="settings-panel__header"><h2>Settings</h2>{appearance.theme === 'batman' && <ThemeArtwork className="settings-panel__theme-decoration" asset={themes.batman.assets.decorations[0]} theme="batman" size={56} />}<button ref={closeButton} className="settings-panel__close" onClick={onClose} aria-label="Close settings"><ThemeGlyph theme={appearance.theme} name="close" size={18} /></button></header>
             <nav className="settings-tabs" aria-label="Settings pages" role="tablist">
-              {([['music', 'Music & Lyrics'], ['appearance', 'Appearance'], ['wallpaper', 'Wallpaper']] as const).map(([id, label]) => <button key={id} role="tab" aria-selected={page === id} className={page === id ? 'is-selected' : ''} onClick={() => selectPage(id)}>{label}</button>)}
+              {([['music', 'Music & Lyrics'], ['appearance', 'Appearance'], ['wallpaper', 'Wallpaper']] as const).map(([id, label]) => <button key={id} id={`${tabsId}-${id}`} role="tab" aria-controls={`${tabsId}-content`} aria-selected={page === id} tabIndex={page === id ? 0 : -1} className={page === id ? 'is-selected' : ''} onClick={() => selectPage(id)} onKeyDown={(event) => {
+                const pages = ['music', 'appearance', 'wallpaper'] as const
+                const index = pages.indexOf(id)
+                const next = event.key === 'ArrowRight' ? pages[(index + 1) % 3] : event.key === 'ArrowLeft' ? pages[(index + 2) % 3] : event.key === 'Home' ? pages[0] : event.key === 'End' ? pages[2] : null
+                if (next) { event.preventDefault(); selectPage(next); document.getElementById(`${tabsId}-${next}`)?.focus() }
+              }}>{label}</button>)}
             </nav>
+            <div ref={body} className="settings-panel__body">
             <AnimatePresence mode="wait" initial={false} custom={direction}>
-              <motion.div key={page} role="tabpanel" aria-label={page === 'music' ? 'Music & Lyrics' : page === 'appearance' ? 'Appearance' : 'Wallpaper'} custom={direction} variants={{enter:(direction:number)=>({opacity:0,x:direction * navigation.viewTravel}),show:{opacity:1,x:0},leave:(direction:number)=>({opacity:0,x:-direction * navigation.viewTravel})}} initial="enter" animate="show" exit="leave" transition={{ duration: navigation.view, ease: navigation.ease }}>
+              <motion.div key={page} id={`${tabsId}-content`} className="settings-panel__content" role="tabpanel" aria-labelledby={`${tabsId}-${page}`} custom={direction} variants={{enter:(direction:number)=>({opacity:0,y:direction * Math.min(12, navigation.viewTravel)}),show:{opacity:1,y:0},leave:(direction:number)=>({opacity:0,y:-direction * Math.min(12, navigation.viewTravel)})}} initial="enter" animate="show" exit="leave" transition={{ duration: Math.min(.4, navigation.view) / 2, ease: navigation.ease }}>
             {page === 'music' && <>
 
             <section className="settings-section" aria-labelledby="layout-heading">
@@ -148,7 +158,7 @@ export function SettingsPanel({ open, preferences, onChange, onClose, portableOp
                   {Object.entries(fontFamilies).map(([id, family]) => <option key={id} value={id}>{family.label}</option>)}
                 </select>
               </Setting>
-              <div className="settings-style-preview-wrap"><span>Live preview</span><div className={`settings-style-preview lyrics lyrics--preset-${style.preset}`} style={lyricStyleVariables(style, preferences)} aria-label="Lyric style preview"><p className="lyrics__adjacent">Where the quiet feels like home</p><p className="lyrics__current">Stay here in the afterglow</p><p className="lyrics__adjacent">And the water turns to gold</p></div></div>
+              <LyricSettingsPreview preferences={preferences} style={style} />
               <Setting label="Font size" value={`${style.fontSize}%`}><input type="range" min="75" max="145" step="5" value={style.fontSize} onChange={(event) => updateStyle({ fontSize: Number(event.target.value) })} /></Setting>
               <Setting label="Font weight" value="">
                 <select value={style.fontWeight} onChange={(event) => updateStyle({ fontWeight: Number(event.target.value) as LyricStyle['fontWeight'] })}>
@@ -204,6 +214,7 @@ export function SettingsPanel({ open, preferences, onChange, onClose, portableOp
             {page === 'wallpaper' && <WallpaperSettingsPage settings={wallpaper} onChange={onWallpaperChange} onPreset={onWallpaperPreset} currentVisual={currentVisual} customWallpaper={customWallpaper} error={wallpaperError} onUpload={onUploadWallpaper} onRemove={onRemoveWallpaper} spotifyTrack={spotifyTrack} onSetVisual={onSetVisual} />}
               </motion.div>
             </AnimatePresence>
+            </div>
           </motion.aside>
         </motion.div>
       )}

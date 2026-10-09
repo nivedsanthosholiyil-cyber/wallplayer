@@ -117,6 +117,7 @@ export function useLocalMusic() {
       objectUrls.current.delete(id)
       if (mounted.current) {
         const nextTrack = materialize(record)
+        playerStore.updateLocalLibraryTrack(nextTrack)
         setTracks((current) => current.map((track) => track.id === trackId ? nextTrack : track))
         setError('')
       }

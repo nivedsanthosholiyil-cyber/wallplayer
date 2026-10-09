@@ -1,0 +1,13 @@
+{
+  "appId": "com.musicwall.desktop",
+  "productName": "MusicWall",
+  "directories": { "output": "release" },
+  "electronDist": "node_modules/electron/dist",
+  "files": ["dist-desktop/**/*", "desktop/**/*", "server/**/*.mjs", "package.json", "!node_modules/**/*"],
+  "asar": true,
+  "npmRebuild": false,
+  "extraMetadata": { "main": "desktop/main.cjs", "dependencies": {} },
+  "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "artifactName": "MusicWall-Setup-${version}-${arch}.${ext}" },
+  "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "deleteAppDataOnUninstall": false },
+  "publish": null
+}
