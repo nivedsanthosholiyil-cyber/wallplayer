@@ -77,7 +77,10 @@ async function hostFailure(error, failedHost) {
   // our own window rather than showing a potentially stranded child as a popup.
   scheduleWindowRecovery('window')
   if (window && !window.isDestroyed()) window.destroy()
-  dialog.showErrorBox('Spontaneous wallpaper mode', `${error.message}\nSpontaneous will reopen in normal-window mode. Reconnect Spotify if necessary.`)
+  // A synchronous dialog would prevent the recovery timer from reopening the player.
+  void dialog.showMessageBox({ type: 'error', title: 'Spontaneous wallpaper mode',
+    message: `${error.message}\nSpontaneous will reopen in normal-window mode. Reconnect Spotify if necessary.` })
+    .catch(error => log('Could not show wallpaper error: ' + error.message))
 }
 async function changeMode(next, remember = true) {
   if (quitting || changingMode || !window || window.isDestroyed()) return

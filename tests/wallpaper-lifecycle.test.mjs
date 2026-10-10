@@ -41,7 +41,7 @@ async function desktop() {
   const server = Object.assign(new EventEmitter(), { pid: 22,
     postMessage: vi.fn(data => { if(data.type === 'shutdown') queueMicrotask(() => server.emit('exit', 0)); if(data.type === 'oauth-begin') queueMicrotask(() => server.emit('message',{type:'oauth-ready',state:data.state})) }), kill: vi.fn(),
   })
-  const electron = { app, BrowserWindow: Window, dialog: { showErrorBox: vi.fn() },
+  const electron = { app, BrowserWindow: Window, dialog: { showErrorBox: vi.fn(), showMessageBox: vi.fn(() => new Promise(() => {})) },
     Menu: { buildFromTemplate: value => value, setApplicationMenu() {} },
     shell: { openExternal: vi.fn().mockResolvedValue(undefined) }, session: { defaultSession: Object.assign(new EventEmitter(), { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} }) },
     ipcMain: {handle:vi.fn(),removeHandler:vi.fn()}, safeStorage:{isAsyncEncryptionAvailable:vi.fn().mockResolvedValue(true)},
@@ -93,7 +93,9 @@ it.runIf(process.platform === 'win32')('returns to a normal window after a crash
   expect(await f.status()).toMatchObject({ mode: 'window', desiredMode: 'wallpaper' })
   expect(JSON.parse(await readFile(join(f.directory, 'desktop-mode.json'), 'utf8'))).toEqual({ mode: 'wallpaper' })
   expect(f.app.quit).not.toHaveBeenCalled()
-  expect(f.electron.dialog.showErrorBox).toHaveBeenCalledOnce()
+  expect(f.electron.dialog.showErrorBox).not.toHaveBeenCalled()
+  // Recovery must complete while the asynchronous error dialog is still open.
+  expect(f.electron.dialog.showMessageBox).toHaveBeenCalledOnce()
   // A subsequent real mode request still works through the existing second-instance action.
   f.app.emit('second-instance', {}, ['--wallpaper']); await vi.advanceTimersByTimeAsync(0)
   expect(await f.status()).toMatchObject({ mode: 'wallpaper', desiredMode: 'wallpaper' })
