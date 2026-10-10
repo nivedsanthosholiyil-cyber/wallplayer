@@ -82,8 +82,9 @@ export const playerStore = {
       return
     }
     const sameTrack = state.spotifyPlayback?.trackId === playback.trackId
-    const syncedTime = sameTrack && state.isPlaying === playback.isPlaying && Math.abs(state.currentTime - playback.position) < 0.65
-      ? state.currentTime : playback.position
+    // Reconcile even small corrections: ignoring them leaves lyrics behind the song.
+    const age = playback.sampledAt === undefined ? 0 : Math.max(0, (performance.now() - playback.sampledAt) / 1000)
+    const syncedTime = Math.min(playback.duration, playback.position + (playback.isPlaying ? age : 0))
     setState({
       spotifyPlayback: playback,
       spotifyTrack: sameTrack && state.spotifyTrack ? { ...track, lyrics: state.spotifyTrack.lyrics, plainLyrics: state.spotifyTrack.plainLyrics } : track,
@@ -159,11 +160,11 @@ export const playerStore = {
   },
   toggleMute: () => setState({ isMuted: !state.isMuted, volume: state.volume === 0 ? 0.7 : state.volume }),
   tick(delta: number) {
-    if (!state.isPlaying || delta <= 0) return
+    if (!state.isPlaying || !Number.isFinite(delta) || delta <= 0) return
     if (state.source === 'local') return
     if (state.source === 'spotify') {
       const duration = state.spotifyTrack?.duration ?? 0
-      setState({ currentTime: Math.min(duration, state.currentTime + Math.min(delta, 1)) })
+      setState({ currentTime: Math.min(duration, state.currentTime + delta) })
       return
     }
     const duration = mockTracks[state.trackIndex].duration

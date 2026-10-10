@@ -51,11 +51,20 @@ function DualLine({ line, index, preferences, immediate }: { line:TimedLyric; in
     const duration = immediate || style.animationStyle === 'none' ? 0 : movement.enabled ? (present ? .45 + .3 * movement.intensity : .18 + .12 * movement.intensity) * Math.max(.5, Math.min(1.5,style.animationSpeed / .65)) : .1
     const control = animate(element.current, { opacity: present ? 1 : 0, y: present ? 0 : -travel / 2, scale: 1, filter: present ? 'blur(0px)' : `blur(${movement.enabled ? Math.min(6, 2 + style.blur) : 0}px)` }, {duration: present && !playing.current ? 0 : duration, ease:[.22,1,.36,1]})
     animation.current = control
-    if (!playing.current && !present) control.pause()
     void control.then(() => { if (!disposed && !present) removeRef.current?.() })
     return () => { disposed = true; control.stop(); animation.current = null }
   }, [present, immediate, movement.enabled, movement.intensity, style.animationStyle, style.animationSpeed, style.blur, travel, moving])
-  useEffect(() => { if (isPlaying) animation.current?.play(); else animation.current?.pause() }, [isPlaying])
+  useEffect(() => {
+    if (isPlaying) return
+    // Pausing during entry must not freeze the active line at opacity zero.
+    animation.current?.stop(); animation.current = null
+    if (!present) removeRef.current?.()
+    else if (element.current) {
+      element.current.style.opacity = '1'
+      element.current.style.transform = 'none'
+      element.current.style.filter = 'blur(0px)'
+    }
+  }, [isPlaying, present])
   return <div ref={element} className={`lyrics__dual-line lyrics--preset-${style.preset}`} data-dual-position={dualPositionForIndex(index)} data-active={present} style={{...lyricStyleVariables(style,preferences),...initial}}><p className="lyrics__current">{line.text}</p></div>
 }
 
@@ -96,6 +105,6 @@ export function DualSplitLyrics({ track, lyricsState, preferences, isPlaying, cu
   if (jump) immediate.current = true
   else if (changedIndex) immediate.current = false
   return <section ref={canvas} className="lyrics--dual-split" style={lyricStyleVariables(effectiveLyricStyle(preferences),preferences)} aria-label="Synchronized Dual Split lyrics" data-lyric-index={activeIndex} data-dual-position={activeIndex >= 0 ? dualPositionForIndex(activeIndex) : 'gap'}>
-    <PlaybackMotionContext.Provider value={isPlaying}><AnimatePresence key={`${track.id}:${revision}`} mode="wait" initial={false}>{current && <DualLine key={current.id} line={current} index={activeIndex} preferences={preferences} immediate={jump || immediate.current} />}</AnimatePresence></PlaybackMotionContext.Provider>
+    <PlaybackMotionContext.Provider value={isPlaying}><AnimatePresence key={`${track.id}:${revision}`} mode="sync" initial={false}>{current && <DualLine key={current.id} line={current} index={activeIndex} preferences={preferences} immediate={jump || immediate.current} />}</AnimatePresence></PlaybackMotionContext.Provider>
   </section>
 }

@@ -42,6 +42,8 @@ export interface NormalizedPlayback {
   artwork: string | null
   duration: number
   position: number
+  /** Monotonic receipt time; position is adjusted to this sample's receipt. */
+  sampledAt?: number
   isPlaying: boolean
   deviceAvailable: boolean
   deviceId: string | null
