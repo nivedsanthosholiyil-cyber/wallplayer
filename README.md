@@ -4,7 +4,9 @@ A cinematic, single-screen music player built with React, Vite, Tailwind CSS, Ty
 
 ## Windows download
 
-[Download Spontaneous Setup for Windows x64](https://github.com/nivedsanthosholiyil-cyber/wallplayer/releases/download/v0.1.0-preview.1/Spontaneous-Setup-0.1.0-x64.exe). This is a preview build; see the [release notes](https://github.com/nivedsanthosholiyil-cyber/wallplayer/releases/tag/v0.1.0-preview.1) and [verification report](docs/windows-installer-verification.md).
+[Download Spontaneous Setup for Windows x64](https://github.com/nivedsanthosholiyil-cyber/wallplayer/releases/download/v0.1.1-preview.1/Spontaneous-Setup-0.1.1-x64.exe). This is a preview build; see the [release notes](https://github.com/nivedsanthosholiyil-cyber/wallplayer/releases/tag/v0.1.1-preview.1) and [verification report](docs/windows-runtime-acceptance.md).
+
+Version 0.1.1 fixes restoration of saved Spotify connections and native wallpaper-window styles. Wallpaper motion now offers Off, Parallax only, Breathing only and Parallax + breathing. The gentle centered breathing replaces automatic directional drifting and respects global Motion and reduced-motion preferences.
 
 Run the single setup file and choose an installation folder. No separate Node.js installation or development server is needed. The **Startup options** page offers **Open Spontaneous when Windows starts**. It is unchecked for a fresh installation; enabling it opens the app as your live wallpaper when you sign in to Windows. Updates preserve the choice. You can disable it later in Windows Settings → Apps → Startup.
 

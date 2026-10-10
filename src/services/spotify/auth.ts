@@ -41,10 +41,14 @@ function readStorage<T>(key: string, storage: Storage = sessionStorage): T | nul
   } catch { return null }
 }
 
-function usableTokens(value: unknown): value is TokenRecord {
+function validTokens(value: unknown): value is TokenRecord {
   const record = value as TokenRecord | null
-  return Boolean(record && record.clientId === clientId && typeof record.accessToken === 'string' && record.accessToken
+  return Boolean(record && typeof record.clientId === 'string' && record.clientId.trim()
+    && typeof record.accessToken === 'string' && record.accessToken
     && typeof record.refreshToken === 'string' && record.refreshToken && Number.isFinite(record.expiresAt) && typeof record.scope === 'string')
+}
+function usableTokens(value: unknown): value is TokenRecord {
+  return validTokens(value) && value.clientId === clientId
 }
 const credentialStore = window.musicwallSpotifySession
 const desktopBuild = import.meta.env.MODE === 'desktop'
@@ -109,9 +113,18 @@ if (credentialStore) {
     try {
       const saved = await credentialStore.read()
       if (revision !== authRevision) return
+      // The encrypted record owns the connection, including the public Client ID.
+      // A missing localStorage setting must not strand a valid refresh token at boot.
+      // Keep an explicitly configured/edited ID authoritative for account changes.
+      if (!clientId && validTokens(saved)) {
+        clientId = saved.clientId
+        try { localStorage.setItem('musicwall.spotify.client-id.v1', clientId) } catch { /* Protected credentials still restore this session. */ }
+      }
       const restored = usableTokens(saved) ? saved : tokens
       if (restored) {
-        await credentialStore.write(restored)
+        // A protected read already handles cipher migration. Write only legacy
+        // session credentials here, rather than rewriting every saved connection.
+        if (restored !== saved) await credentialStore.write(restored)
         if (revision !== authRevision) return
         tokens = restored
         sessionStorage.removeItem(tokenKey); localStorage.removeItem(tokenKey)

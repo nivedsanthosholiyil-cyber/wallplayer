@@ -12,16 +12,16 @@ import { restoreInterfaceSettings } from '../src/data/settingsValidation'
 
 it('restores saved wallpaper motion choices and keeps older preferences compatible', () => {
   expect(restoreInterfaceSettings({ wallpaper: { brightness: 90 } }).wallpaper).toMatchObject({ brightness: 90, motionStyle: 'both' })
-  for (const motionStyle of ['parallax', 'ambient', 'both']) {
+  for (const motionStyle of ['off', 'parallax', 'ambient', 'both']) {
     expect(restoreInterfaceSettings(JSON.parse(JSON.stringify({ wallpaper: { motionStyle } }))).wallpaper.motionStyle).toBe(motionStyle)
   }
   expect(restoreInterfaceSettings({ wallpaper: { motionStyle: 'invalid' } }).wallpaper.motionStyle).toBe('both')
 })
 
-it('switches between independent parallax and idle motion without leaving pointer handlers behind', async () => {
+it('switches between breathing, parallax and Off without leaving pointer handlers behind', async () => {
   const container = document.createElement('div'); const root = createRoot(container)
   const frame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1)
-  const render = (motionStyle: 'parallax' | 'ambient' | 'both') => root.render(createElement(AppShell, { appearance: defaultAppearance },
+  const render = (motionStyle: 'off' | 'parallax' | 'ambient' | 'both') => root.render(createElement(AppShell, { appearance: defaultAppearance },
     createElement(VideoBackground, { visual: { kind: 'image', src: '/scene.jpg' }, ambient: true, isPlaying: true, isMuted: true, volume: 0, settings: { ...defaultWallpaper, motionStyle } })))
   const pointer = () => window.dispatchEvent(new CustomEvent('musicwall:wallpaper-pointer', { detail: { x: 0, y: 0, inside: true } }))
   try {
@@ -35,7 +35,30 @@ it('switches between independent parallax and idle motion without leaving pointe
     await act(async () => render('both'))
     expect(container.querySelector<HTMLElement>('.video-background__idle')!.dataset.moving).toBe('true')
     frame.mockClear(); pointer(); expect(frame).toHaveBeenCalledTimes(1)
+    await act(async () => render('off'))
+    expect(container.querySelector<HTMLElement>('.video-background__idle')!.dataset.moving).toBe('false')
+    expect(container.querySelector<HTMLElement>('.video-background__scene')!.dataset.parallax).toBe('false')
+    expect(container.querySelector<HTMLElement>('.video-background__scene')!.style.getPropertyValue('--album-y')).toBe('')
+    frame.mockClear(); pointer(); expect(frame).not.toHaveBeenCalled()
   } finally { await act(async () => root.unmount()); frame.mockRestore() }
+})
+
+it('bounds breathing crop and keeps its wrapper stable across track and playback changes', async () => {
+  const container = document.createElement('div'), root = createRoot(container)
+  const render = (trackId: string, isPlaying: boolean, intensity: number) => root.render(createElement(AppShell, { appearance: { ...defaultAppearance, motionIntensity: 100 } },
+    createElement(VideoBackground, { visual: { kind: 'image', src: `/${trackId}.jpg` }, trackId, ambient: true, isPlaying, isMuted: true, volume: 0, settings: { ...defaultWallpaper, motionStyle: 'ambient', motionIntensity: intensity } })))
+  try {
+    await act(async () => render('one', true, 100))
+    const breathing = container.querySelector<HTMLElement>('.video-background__idle')!
+    expect(Number(breathing.style.getPropertyValue('--breathing-scale'))).toBeCloseTo(1.008)
+    expect(container.querySelector('.video-background__image[data-moving="true"]')).toBeNull()
+    await act(async () => render('two', false, 100))
+    expect(container.querySelector('.video-background__idle')).toBe(breathing)
+    expect(breathing.dataset.moving).toBe('true')
+    await act(async () => render('two', true, 0))
+    expect(breathing.dataset.moving).toBe('false')
+    expect(breathing.style.getPropertyValue('--breathing-scale')).toBe('1')
+  } finally { await act(async () => root.unmount()) }
 })
 
 it('responds to OS reduced-motion changes without changing the selected theme', async () => {

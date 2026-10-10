@@ -50,7 +50,7 @@ export interface WallpaperSettings {
   overlayOpacity: number
   colorTemperature: number
   backgroundOpacity: number
-  motionStyle: 'parallax' | 'ambient' | 'both'
+  motionStyle: 'off' | 'parallax' | 'ambient' | 'both'
   motionIntensity: number
   videoSpeed: number
   loopVideo: boolean

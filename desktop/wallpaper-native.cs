@@ -36,7 +36,9 @@ public sealed class MusicWallWallpaper {
     [DllImport("user32.dll", SetLastError=true)] static extern IntPtr SetParent(IntPtr hwnd, IntPtr parent);
     [DllImport("user32.dll", EntryPoint="GetWindowLongPtrW")] static extern IntPtr GetLong(IntPtr hwnd, int index);
     [DllImport("user32.dll", EntryPoint="SetWindowLongPtrW", SetLastError=true)] static extern IntPtr SetLong(IntPtr hwnd, int index, IntPtr value);
-    [DllImport("kernel32.dll")] static extern void SetLastError(uint error);
+    // Windows PowerShell runs .NET Framework, which caches the last P/Invoke
+    // error. Clear that cache too: a successful SetWindowLongPtr can return zero.
+    [DllImport("kernel32.dll", SetLastError=true)] static extern void SetLastError(uint error);
     [DllImport("user32.dll", SetLastError=true)] static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
     [DllImport("user32.dll")] static extern int MapWindowPoints(IntPtr from, IntPtr to, ref Point point, uint count);
@@ -111,9 +113,13 @@ public sealed class MusicWallWallpaper {
         return host;
     }
     static void Style(IntPtr w,int index,long value) {
+        // Removing an already-null owner can report ERROR_INVALID_WINDOW_HANDLE
+        // even for a live HWND. Restore is idempotent; do not rewrite a value
+        // that is already correct (and never accept an invalid HWND as a no-op).
+        if (IsWindow(w) && GetLong(w,index).ToInt64()==value) return;
         SetLastError(0); IntPtr previous=SetLong(w,index,new IntPtr(value));
         int error=Marshal.GetLastWin32Error();
-        if (previous==IntPtr.Zero && error!=0) throw new Win32Exception(error,"Could not set wallpaper window style.");
+        if (previous==IntPtr.Zero && error!=0) throw new Win32Exception(error,"Could not set wallpaper window style (index " + index + ", error " + error + ").");
     }
     public void SetInputWindow(string handle, uint ownerPid) {
         IntPtr candidate=new IntPtr(Convert.ToInt64(handle,16)); uint pid;

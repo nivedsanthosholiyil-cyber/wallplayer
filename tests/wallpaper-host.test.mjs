@@ -121,6 +121,10 @@ it.runIf(process.platform === 'win32')('refuses a HWND that does not belong to t
   await expect(promisify(execFile)('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', resolve('desktop/wallpaper-host.ps1'), '-WindowHandle', '0', '-ParentPid', String(process.pid)], { windowsHide: true, timeout: 15000 }))
     .rejects.toMatchObject({ code: 1, stdout: expect.stringContaining('does not belong') })
 }, 20000)
+it.runIf(process.platform === 'win32')('restores fixture-owned native windows repeatedly with null owners and still rejects invalid handles', async () => {
+  const { stdout } = await promisify(execFile)('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', resolve('tests/fixtures/native-style-restoration.ps1'), '-Source', resolve('desktop/wallpaper-native.cs')], { windowsHide: true, timeout: 15000 })
+  expect(JSON.parse(stdout.trim())).toEqual({ changed: true, restored: true, owner: 0, cycles: 3, invalidRejected: true })
+}, 20000)
 it.runIf(process.platform === 'win32')('keeps the keyboard input surface an activatable popup without caption or desktop-child flags', async () => {
   const source = resolve('desktop/wallpaper-native.cs').replaceAll("'", "''")
   const script = `Add-Type -TypeDefinition ([IO.File]::ReadAllText('${source}')); [MusicWallWallpaper]::InputStyle(0x51CF0000) | ConvertTo-Json -Compress`

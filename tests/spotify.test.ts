@@ -57,6 +57,39 @@ it('restores desktop credentials through the protected bridge without putting to
   expect(bridge.clear).toHaveBeenCalledOnce()
 })
 
+it('recovers a missing public Client ID from encrypted credentials and refreshes after a cold boot', async () => {
+  vi.stubEnv('VITE_SPOTIFY_CLIENT_ID', '')
+  const record = { clientId, accessToken: 'expired-desktop-access', refreshToken: 'saved-refresh', expiresAt: 1, scope: 'user-read-playback-state user-modify-playback-state' }
+  const bridge = { read: vi.fn().mockResolvedValue(record), write: vi.fn().mockResolvedValue(undefined), clear: vi.fn().mockResolvedValue(undefined) }
+  window.musicwallSpotifySession = bridge
+  const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ access_token: 'refreshed-access', expires_in: 3600 }))
+  vi.stubGlobal('fetch', fetchMock)
+  const { spotifyAuth } = await import('../src/services/spotify/auth')
+  await spotifyAuth.ready()
+  expect(spotifyAuth.getSnapshot()).toMatchObject({ status: 'connected', clientId, canControl: true })
+  expect(localStorage.getItem('musicwall.spotify.client-id.v1')).toBe(clientId)
+  expect(bridge.write).not.toHaveBeenCalled()
+  expect(await spotifyAuth.getAccessToken()).toBe('refreshed-access')
+  const body = fetchMock.mock.calls[0][1].body as URLSearchParams
+  expect(Object.fromEntries(body)).toEqual({ client_id: clientId, grant_type: 'refresh_token', refresh_token: 'saved-refresh' })
+  expect(bridge.write).toHaveBeenCalledWith(expect.objectContaining({ clientId, accessToken: 'refreshed-access', refreshToken: 'saved-refresh' }))
+  expect(bridge.clear).not.toHaveBeenCalled()
+  expect(localStorage.getItem('musicwall.spotify.tokens.v1')).toBeNull()
+  expect(sessionStorage.getItem('musicwall.spotify.tokens.v1')).toBeNull()
+})
+
+it('does not replace an explicitly selected Client ID with another saved desktop account', async () => {
+  vi.stubEnv('VITE_SPOTIFY_CLIENT_ID', '')
+  localStorage.setItem('musicwall.spotify.client-id.v1', 'selected-client')
+  const bridge = { read: vi.fn().mockResolvedValue({ clientId, accessToken: 'access', refreshToken: 'refresh', expiresAt: Date.now() + 3600_000, scope: '' }), write: vi.fn(), clear: vi.fn() }
+  window.musicwallSpotifySession = bridge
+  const { spotifyAuth } = await import('../src/services/spotify/auth')
+  await spotifyAuth.ready()
+  expect(spotifyAuth.getSnapshot()).toMatchObject({ status: 'disconnected', clientId: 'selected-client' })
+  expect(bridge.write).not.toHaveBeenCalled()
+  expect(bridge.clear).not.toHaveBeenCalled()
+})
+
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()

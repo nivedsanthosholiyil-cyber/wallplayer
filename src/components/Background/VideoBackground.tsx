@@ -26,9 +26,6 @@ function BackgroundMedia({ layer, active, inactive, settings, isPlaying, isMuted
 }) {
   const video = useRef<HTMLVideoElement>(null)
   const movement = useMotionSettings()
-  const reducedMotion = !movement.enabled || settings?.motionStyle === 'parallax'
-  const motionAmount = Math.min(1, (settings?.motionIntensity ?? 50) / 50)
-  const peakScale = 1 + (movement.backgroundScale - 1) * motionAmount * .4
   const position = settings?.position === 'custom' ? `${settings.customX}% ${settings.customY}%` : 'center center'
   useEffect(() => {
     const media = video.current
@@ -49,7 +46,7 @@ function BackgroundMedia({ layer, active, inactive, settings, isPlaying, isMuted
   }, [])
   return <motion.div className="video-background__layer" initial={false} animate={{ opacity: layer.visible || layer.loaded ? 1 : 0 }} transition={{ duration: movement.crossfade, ease: 'easeOut' }}>
     {layer.visual.kind === 'video' ? <video ref={video} className="video-background__media" src={layer.visual.src} poster={layer.visual.poster} autoPlay={movement.enabled} muted={ambient || isMuted} loop={ambient || (settings?.loopVideo ?? true)} playsInline preload="auto" onLoadedData={onReady} onError={onError} style={{ objectPosition: position, objectFit: ambient ? 'cover' : undefined }} />
-      : ambient ? <AlbumArtBackground imageUrl={layer.visual.src} trackId={trackId ?? null} visible={layer.visible} motionIntensity={settings?.motionIntensity} paused={settings?.pauseWhenInactive && inactive} onReady={onReady} onError={onError} /> : <img className="video-background__media video-background__image" data-moving={!reducedMotion && motionAmount > 0 && layer.visible} src={layer.visual.src} alt="" onLoad={onReady} onError={onError} style={{ objectPosition: position, '--ambient-scale': peakScale, '--ambient-drift': `${movement.backgroundDrift * motionAmount}%`, animationDuration: `${movement.backgroundDuration}s`, animationPlayState: settings?.pauseWhenInactive && inactive ? 'paused' : 'running' } as CSSProperties} />}
+      : ambient ? <AlbumArtBackground imageUrl={layer.visual.src} trackId={trackId ?? null} onReady={onReady} onError={onError} /> : <img className="video-background__media video-background__image" src={layer.visual.src} alt="" onLoad={onReady} onError={onError} style={{ objectPosition: position }} />}
   </motion.div>
 }
 
@@ -59,7 +56,7 @@ export function VideoBackground({ visual, isPlaying, isMuted, volume, artwork, s
   useEffect(() => { motionDiagnostic('background', 'mount'); return () => motionDiagnostic('background', 'cleanup') }, [])
   useEffect(() => {
     const element = scene.current
-    if (!element || !movement.enabled || settings?.motionIntensity === 0 || settings?.motionStyle === 'ambient') return
+    if (!element || !movement.enabled || settings?.motionIntensity === 0 || settings?.motionStyle === 'ambient' || settings?.motionStyle === 'off') return
     motionDiagnostic('parallax', 'start')
     let frame = 0
     let x = 0; let y = 0
@@ -148,15 +145,15 @@ export function VideoBackground({ visual, isPlaying, isMuted, volume, artwork, s
   }
   const idleAmount = Math.max(0, Math.min(1, (settings?.motionIntensity ?? 50) / 50))
   const idleStyle = {
-    '--idle-x': `${movement.parallax * idleAmount}px`,
-    '--idle-y': `${movement.parallax * idleAmount * .5}px`,
-    '--album-travel': `${movement.parallax * idleAmount / 4}%`,
+    // One centered breathing layer, independent of pointer movement and track changes.
+    // Cap the additional crop at 0.8% even at the strongest global Motion setting.
+    '--breathing-scale': 1 + .008 * (movement.enabled ? movement.intensity : 0) * idleAmount,
     animationDuration: `${movement.backgroundDuration * .5}s`,
     animationPlayState: settings?.pauseWhenInactive && inactive && !desktopVisible ? 'paused' : 'running',
   } as CSSProperties
   return <div className="video-background" aria-hidden="true" style={variables}>
-    <div ref={scene} className="video-background__scene" data-parallax={movement.enabled && settings?.motionStyle !== 'ambient'} data-album-art={ambient}>
-      <div className="video-background__idle" data-moving={movement.enabled && idleAmount > 0 && settings?.motionStyle !== 'parallax'} style={idleStyle}>
+    <div ref={scene} className="video-background__scene" data-parallax={movement.enabled && idleAmount > 0 && settings?.motionStyle !== 'ambient' && settings?.motionStyle !== 'off'} data-album-art={ambient}>
+      <div className="video-background__idle" data-moving={movement.enabled && idleAmount > 0 && settings?.motionStyle !== 'parallax' && settings?.motionStyle !== 'off'} style={idleStyle}>
         {layers.map((layer) => <BackgroundMedia key={layer.key} layer={layer} active={layer.visible || layer.key === desired.current} inactive={inactive && !desktopVisible} settings={settings} isPlaying={isPlaying} isMuted={isMuted} volume={volume} ambient={ambient} trackId={layer.trackId} onReady={() => ready(layer.key)} onError={() => failed(layer.key)} />)}
       </div>
     </div>

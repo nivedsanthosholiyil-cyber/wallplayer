@@ -59,16 +59,14 @@ it('waits for decoded artwork, ignores stale loads, survives pause, and falls ba
     const first = container.querySelector('img[src="/one.jpg"]')!
     expect((first as HTMLImageElement).style.objectFit).toBe('cover')
     expect((first as HTMLImageElement).style.objectPosition).toContain('var(--album-x, 50%)')
-    expect((first as HTMLImageElement).style.getPropertyValue('--ambient-scale')).toBe('1')
-    expect(first.getAttribute('data-moving')).toBe('true')
-    const duration = (first as HTMLImageElement).style.animationDuration
+    // Breathing belongs to the stable compositor, never a second image animation.
+    expect(first.hasAttribute('data-moving')).toBe(false)
     const idle = container.querySelector<HTMLElement>('.video-background__idle')!
     const idleDuration = idle.style.animationDuration
     expect(idle.dataset.moving).toBe('true')
     await render('one', '/one.jpg', false)
     expect(container.querySelector('img[src="/one.jpg"]')).toBe(first)
-    expect(first.getAttribute('data-moving')).toBe('true')
-    expect((first as HTMLImageElement).style.animationDuration).toBe(duration)
+    expect(first.hasAttribute('data-moving')).toBe(false)
     expect(container.querySelector('.video-background__idle')).toBe(idle)
     expect(idle.style.animationDuration).toBe(idleDuration)
     expect(idle.style.animationPlayState).toBe('running')
@@ -105,14 +103,11 @@ it('pauses an inactive browser scene but keeps attached desktop wallpaper animat
   const container = document.createElement('div'), root = createRoot(container)
   try {
     await act(async () => root.render(createElement(VideoBackground, {visual:{kind:'image',src:'/scene.jpg'},ambient:true,isPlaying:false,isMuted:true,volume:0,settings:defaultWallpaper})))
-    const image = container.querySelector<HTMLImageElement>('img[src="/scene.jpg"]')!
-    expect(image.style.animationPlayState).toBe('paused')
     const idle = container.querySelector<HTMLElement>('.video-background__idle')!
     expect(idle.style.animationPlayState).toBe('paused')
     await act(async () => document.documentElement.setAttribute('data-wallpaper-input',''))
-    expect(image.style.animationPlayState).toBe('running')
     expect(idle.style.animationPlayState).toBe('running')
     await act(async () => document.documentElement.removeAttribute('data-wallpaper-input'))
-    expect(image.style.animationPlayState).toBe('paused')
+    expect(idle.style.animationPlayState).toBe('paused')
   } finally {await act(async () => root.unmount());hidden.mockRestore();document.documentElement.removeAttribute('data-wallpaper-input')}
 })
