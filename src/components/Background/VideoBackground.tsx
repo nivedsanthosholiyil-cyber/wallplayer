@@ -4,6 +4,7 @@ import { useMotionSettings } from '../../hooks/useMotionSettings'
 import { AlbumArtBackground } from './AlbumArtBackground'
 import type { VisualSource } from '../../types/music'
 import type { WallpaperSettings } from '../../types/interfaceSettings'
+import { motionDiagnostic } from '../../services/motionDiagnostics'
 
 interface VideoBackgroundProps {
   visual: VisualSource
@@ -25,10 +26,9 @@ function BackgroundMedia({ layer, active, inactive, settings, isPlaying, isMuted
 }) {
   const video = useRef<HTMLVideoElement>(null)
   const movement = useMotionSettings()
-  const reducedMotion = !movement.enabled
+  const reducedMotion = !movement.enabled || settings?.motionStyle === 'parallax'
   const motionAmount = Math.min(1, (settings?.motionIntensity ?? 50) / 50)
-  const baseScale = 1
-  const peakScale = 1 + (movement.backgroundScale - 1) * motionAmount
+  const peakScale = 1 + (movement.backgroundScale - 1) * motionAmount * .4
   const position = settings?.position === 'custom' ? `${settings.customX}% ${settings.customY}%` : 'center center'
   useEffect(() => {
     const media = video.current
@@ -36,7 +36,11 @@ function BackgroundMedia({ layer, active, inactive, settings, isPlaying, isMuted
     media.muted = ambient || isMuted
     media.volume = ambient ? 0 : volume
     media.playbackRate = settings?.videoSpeed ?? 1
-    if (movement.enabled && active && (ambient || isPlaying) && !(settings?.pauseWhenInactive && inactive)) void media.play().catch(() => {})
+    if (movement.enabled && active && (ambient || isPlaying) && !(settings?.pauseWhenInactive && inactive)) void media.play().catch(error => {
+      // A later pause/unmount aborts an in-flight play normally. Other failures
+      // need a visible diagnostic instead of disappearing into an empty catch.
+      if (error?.name !== 'AbortError') { motionDiagnostic('video', 'play-rejected'); console.warn('[MusicWall video] Playback rejected:', error?.name || 'Error') }
+    })
     else media.pause()
   }, [active, isPlaying, isMuted, volume, ambient, inactive, settings?.videoSpeed, settings?.pauseWhenInactive, movement.enabled])
   useEffect(() => {
@@ -45,28 +49,51 @@ function BackgroundMedia({ layer, active, inactive, settings, isPlaying, isMuted
   }, [])
   return <motion.div className="video-background__layer" initial={false} animate={{ opacity: layer.visible || layer.loaded ? 1 : 0 }} transition={{ duration: movement.crossfade, ease: 'easeOut' }}>
     {layer.visual.kind === 'video' ? <video ref={video} className="video-background__media" src={layer.visual.src} poster={layer.visual.poster} autoPlay={movement.enabled} muted={ambient || isMuted} loop={ambient || (settings?.loopVideo ?? true)} playsInline preload="auto" onLoadedData={onReady} onError={onError} style={{ objectPosition: position, objectFit: ambient ? 'cover' : undefined }} />
-      : ambient ? <AlbumArtBackground imageUrl={layer.visual.src} trackId={trackId ?? null} visible={layer.visible} motionIntensity={settings?.motionIntensity} onReady={onReady} onError={onError} /> : <motion.img className="video-background__media video-background__image" src={layer.visual.src} alt="" onLoad={onReady} onError={onError} style={{ objectPosition: position, objectFit: ambient ? 'cover' : undefined }} animate={reducedMotion || !(ambient || isPlaying) || (settings?.pauseWhenInactive && inactive) ? { scale: baseScale, x: 0 } : { scale: [baseScale, peakScale, baseScale], x: [0, movement.backgroundDrift * motionAmount, 0] }} transition={{ duration: movement.backgroundDuration, ease: 'easeInOut', repeat: Infinity }} />}
+      : ambient ? <AlbumArtBackground imageUrl={layer.visual.src} trackId={trackId ?? null} visible={layer.visible} motionIntensity={settings?.motionIntensity} paused={settings?.pauseWhenInactive && inactive} onReady={onReady} onError={onError} /> : <img className="video-background__media video-background__image" data-moving={!reducedMotion && motionAmount > 0 && layer.visible} src={layer.visual.src} alt="" onLoad={onReady} onError={onError} style={{ objectPosition: position, '--ambient-scale': peakScale, '--ambient-drift': `${movement.backgroundDrift * motionAmount}%`, animationDuration: `${movement.backgroundDuration}s`, animationPlayState: settings?.pauseWhenInactive && inactive ? 'paused' : 'running' } as CSSProperties} />}
   </motion.div>
 }
 
 export function VideoBackground({ visual, isPlaying, isMuted, volume, artwork, settings, ambient = false, hold = false, trackId = null }: VideoBackgroundProps) {
   const movement = useMotionSettings()
   const scene = useRef<HTMLDivElement>(null)
+  useEffect(() => { motionDiagnostic('background', 'mount'); return () => motionDiagnostic('background', 'cleanup') }, [])
   useEffect(() => {
     const element = scene.current
-    if (!element || !movement.enabled || settings?.motionIntensity === 0) return
+    if (!element || !movement.enabled || settings?.motionIntensity === 0 || settings?.motionStyle === 'ambient') return
+    motionDiagnostic('parallax', 'start')
     let frame = 0
     let x = 0; let y = 0
-    const move = (event: PointerEvent) => {
-      if (event.pointerType !== 'mouse') return
-      x = (event.clientX / window.innerWidth - .5) * 2 * movement.parallax
-      y = (event.clientY / window.innerHeight - .5) * 2 * movement.parallax
-      if (!frame) frame = requestAnimationFrame(() => { frame = 0; element.style.transform = `translate3d(${x}px, ${y}px, 0)` })
+    const update = (clientX: number, clientY: number) => {
+      const amount = Math.max(0, Math.min(1, (settings?.motionIntensity ?? 50) / 50))
+      x = (clientX / window.innerWidth - .5) * 2 * movement.parallax * amount
+      y = (clientY / window.innerHeight - .5) * 2 * movement.parallax * amount
+      if (!frame) frame = requestAnimationFrame(() => {
+        frame = 0
+        if (ambient) {
+          // Move within cover's existing crop; never enlarge the album artwork.
+          element.style.setProperty('--album-x', `${50 + x / 2}%`)
+          element.style.setProperty('--album-y', `${50 + y / 2}%`)
+        } else element.style.transform = `translate3d(${x}px, ${y}px, 0)`
+      })
+    }
+    const move = (event: PointerEvent) => { if (event.pointerType === 'mouse') update(event.clientX, event.clientY) }
+    const desktopMove = (event: Event) => {
+      const point = (event as CustomEvent<{ x: number; y: number; inside: boolean }>).detail
+      update(point.inside ? point.x : window.innerWidth / 2, point.inside ? point.y : window.innerHeight / 2)
     }
     window.addEventListener('pointermove', move, { passive: true })
-    return () => { window.removeEventListener('pointermove', move); cancelAnimationFrame(frame); element.style.transform = 'none' }
-  }, [movement.enabled, movement.parallax, settings?.motionIntensity])
+    window.addEventListener('musicwall:wallpaper-pointer', desktopMove)
+    window.dispatchEvent(new Event('musicwall:request-wallpaper-pointer'))
+    return () => { motionDiagnostic('parallax', 'stop'); window.removeEventListener('pointermove', move); window.removeEventListener('musicwall:wallpaper-pointer', desktopMove); cancelAnimationFrame(frame); element.style.transform = 'none'; element.style.removeProperty('--album-x'); element.style.removeProperty('--album-y') }
+  }, [movement.enabled, movement.parallax, settings?.motionIntensity, settings?.motionStyle, ambient])
   const [inactive, setInactive] = useState(document.hidden)
+  const [desktopVisible, setDesktopVisible] = useState(document.documentElement.hasAttribute('data-wallpaper-input'))
+  useEffect(() => {
+    const update = () => setDesktopVisible(document.documentElement.hasAttribute('data-wallpaper-input'))
+    const observer = new MutationObserver(update)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-wallpaper-input'] })
+    return () => observer.disconnect()
+  }, [])
   const [layers, setLayers] = useState<Layer[]>([{ key: keyOf(fallback), visual: fallback, visible: true, loaded: false }])
   const desired = useRef(keyOf(fallback))
   const cleanupTimer = useRef<number | null>(null)
@@ -119,8 +146,20 @@ export function VideoBackground({ visual, isPlaying, isMuted, volume, artwork, s
       return [...remaining.filter((layer) => layer.visible), { key: recoveryKey, visual: recovery, visible: false, loaded: false }]
     })
   }
+  const idleAmount = Math.max(0, Math.min(1, (settings?.motionIntensity ?? 50) / 50))
+  const idleStyle = {
+    '--idle-x': `${movement.parallax * idleAmount}px`,
+    '--idle-y': `${movement.parallax * idleAmount * .5}px`,
+    '--album-travel': `${movement.parallax * idleAmount / 4}%`,
+    animationDuration: `${movement.backgroundDuration * .5}s`,
+    animationPlayState: settings?.pauseWhenInactive && inactive && !desktopVisible ? 'paused' : 'running',
+  } as CSSProperties
   return <div className="video-background" aria-hidden="true" style={variables}>
-    <div ref={scene} className="video-background__scene" data-parallax={movement.enabled}>{layers.map((layer) => <BackgroundMedia key={layer.key} layer={layer} active={layer.visible || layer.key === desired.current} inactive={inactive} settings={settings} isPlaying={isPlaying} isMuted={isMuted} volume={volume} ambient={ambient} trackId={layer.trackId} onReady={() => ready(layer.key)} onError={() => failed(layer.key)} />)}</div>
+    <div ref={scene} className="video-background__scene" data-parallax={movement.enabled && settings?.motionStyle !== 'ambient'} data-album-art={ambient}>
+      <div className="video-background__idle" data-moving={movement.enabled && idleAmount > 0 && settings?.motionStyle !== 'parallax'} style={idleStyle}>
+        {layers.map((layer) => <BackgroundMedia key={layer.key} layer={layer} active={layer.visible || layer.key === desired.current} inactive={inactive && !desktopVisible} settings={settings} isPlaying={isPlaying} isMuted={isMuted} volume={volume} ambient={ambient} trackId={layer.trackId} onReady={() => ready(layer.key)} onError={() => failed(layer.key)} />)}
+      </div>
+    </div>
     {artwork && !ambient && <div className="video-background__artwork-tint" style={{ backgroundImage: `url(${artwork})` }} />}
     <div className="video-background__temperature" style={{ background: temperature >= 0 ? `rgba(255, 164, 92, ${temperature / 100 * .36})` : `rgba(88, 155, 255, ${-temperature / 100 * .36})` }} />
     <div className="video-background__wash" /><div className="video-background__vignette" /><div className="video-background__grain" />

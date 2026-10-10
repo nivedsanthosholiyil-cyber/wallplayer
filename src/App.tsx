@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { AppShell } from './components/Player/AppShell'
 import { LyricsDisplay } from './components/Lyrics/LyricsDisplay'
+import { PlainLyrics } from './components/Lyrics/PlainLyrics'
 import { PlayerControls } from './components/Controls/PlayerControls'
 import { PortableLyricsWindow } from './components/PortableLyrics/PortableLyricsWindow'
 import { SettingsPanel } from './components/Settings/SettingsPanel'
@@ -84,7 +85,7 @@ function App() {
         ambient={player.source === 'spotify' && wallpaper.source === 'current'}
         hold={player.source === 'spotify' && wallpaper.source === 'current' && wallpaper.backgroundMode !== 'album-art' && savedVisual.loading}
       />
-      {appearance.showLogo && <div className={`app-brand app-brand--${appearance.logoPosition} app-brand--${appearance.logoStyle}`} style={{ fontSize: appearance.logoSize, opacity: appearance.logoOpacity / 100 }} aria-label="MusicWall"><ThemeMark theme={appearance.theme} />{appearance.logoStyle !== 'symbol' && <span>{appearance.logoStyle === 'monogram' ? 'MW' : 'MusicWall'}</span>}</div>}
+      {appearance.showLogo && <div className={`app-brand app-brand--${appearance.logoPosition} app-brand--${appearance.logoStyle}`} style={{ fontSize: appearance.logoSize, opacity: appearance.logoOpacity / 100 }} aria-label="Spontaneous"><ThemeMark theme={appearance.theme} />{appearance.logoStyle !== 'symbol' && <span>{appearance.logoStyle === 'monogram' ? 'S' : 'Spontaneous'}</span>}</div>}
       <button className="settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Open settings" title="Settings"><ThemeGlyph theme={appearance.theme} name="settings" size={18} /></button>
       <main className={`app-main app-main--${preferences.position}`} data-library-open={browserOpen} data-settings-open={settingsOpen}>
         {player.source !== 'mock' && player.track && <TrackMetadata track={player.track}>
@@ -95,7 +96,7 @@ function App() {
         {!portableOpen && (player.track?.lyrics.length
           ? <LyricsDisplay track={player.track} lyricsState={lyricsState} preferences={preferences} isPlaying={player.isPlaying} currentTime={player.currentTime} />
           : player.track?.plainLyrics?.length
-            ? <div className="lyrics-plain" aria-label="Unsynchronized lyrics">{player.track.plainLyrics.map((line, index) => <p key={index}>{line}</p>)}</div>
+            ? <PlainLyrics key={player.track.id} lines={player.track.plainLyrics} preferences={preferences} />
             : <p className="lyric-status" role="status">{player.status === 'ready' ? lyricsStatus === 'loading' && player.source === 'spotify' ? 'Loading lyrics…' : 'LYRICS UNAVAILABLE' : player.message || 'Waiting for Spotify playback'}</p>)}
       </main>
       <PlayerControls

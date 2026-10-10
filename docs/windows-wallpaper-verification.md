@@ -1,5 +1,7 @@
 # Windows live wallpaper verification — 9 October 2026
 
+Historical baseline. See [the stabilization report](windows-wallpaper-stabilization.md) for recovery changes and installer fingerprint, and [the subsequent real desktop acceptance report](windows-wallpaper-acceptance.md) for observed desktop failures, fixes and user screenshots. The results below describe the preceding candidate and are preserved for comparison.
+
 ## Status
 
 Experimental Windows x64 implementation completed and installer built. Native attachment is verified on Windows 11 Pro build 26200. A fully verified desktop release is **not** claimed: desktop compositing/icon/taskbar interaction, tray clicks, Explorer restart, video decoding and monitor variations still need manual checks.

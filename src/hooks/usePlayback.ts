@@ -33,7 +33,7 @@ export function usePlayback() {
       previous = now
     }, 50)
     return () => window.clearInterval(timer)
-  }, [state.isPlaying, state.source])
+  }, [state.isPlaying, state.source, state.spotifyPlayback])
 
   useEffect(() => {
     const audio = localAudio.current

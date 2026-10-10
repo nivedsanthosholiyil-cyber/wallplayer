@@ -8,6 +8,35 @@ import { AppearanceSettingsPage } from '../src/components/Settings/AppearanceSet
 import { VideoBackground } from '../src/components/Background/VideoBackground'
 import { defaultWallpaper } from '../src/types/interfaceSettings'
 import { defaultAppearance } from '../src/types/interfaceSettings'
+import { restoreInterfaceSettings } from '../src/data/settingsValidation'
+
+it('restores saved wallpaper motion choices and keeps older preferences compatible', () => {
+  expect(restoreInterfaceSettings({ wallpaper: { brightness: 90 } }).wallpaper).toMatchObject({ brightness: 90, motionStyle: 'both' })
+  for (const motionStyle of ['parallax', 'ambient', 'both']) {
+    expect(restoreInterfaceSettings(JSON.parse(JSON.stringify({ wallpaper: { motionStyle } }))).wallpaper.motionStyle).toBe(motionStyle)
+  }
+  expect(restoreInterfaceSettings({ wallpaper: { motionStyle: 'invalid' } }).wallpaper.motionStyle).toBe('both')
+})
+
+it('switches between independent parallax and idle motion without leaving pointer handlers behind', async () => {
+  const container = document.createElement('div'); const root = createRoot(container)
+  const frame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1)
+  const render = (motionStyle: 'parallax' | 'ambient' | 'both') => root.render(createElement(AppShell, { appearance: defaultAppearance },
+    createElement(VideoBackground, { visual: { kind: 'image', src: '/scene.jpg' }, ambient: true, isPlaying: true, isMuted: true, volume: 0, settings: { ...defaultWallpaper, motionStyle } })))
+  const pointer = () => window.dispatchEvent(new CustomEvent('musicwall:wallpaper-pointer', { detail: { x: 0, y: 0, inside: true } }))
+  try {
+    await act(async () => render('parallax'))
+    expect(container.querySelector<HTMLElement>('.video-background__idle')!.dataset.moving).toBe('false')
+    frame.mockClear(); pointer(); expect(frame).toHaveBeenCalledTimes(1)
+    await act(async () => render('ambient'))
+    expect(container.querySelector<HTMLElement>('.video-background__idle')!.dataset.moving).toBe('true')
+    expect(container.querySelector<HTMLElement>('.video-background__scene')!.style.getPropertyValue('--album-y')).toBe('')
+    frame.mockClear(); pointer(); expect(frame).not.toHaveBeenCalled()
+    await act(async () => render('both'))
+    expect(container.querySelector<HTMLElement>('.video-background__idle')!.dataset.moving).toBe('true')
+    frame.mockClear(); pointer(); expect(frame).toHaveBeenCalledTimes(1)
+  } finally { await act(async () => root.unmount()); frame.mockRestore() }
+})
 
 it('responds to OS reduced-motion changes without changing the selected theme', async () => {
   const container = document.createElement('div'); const root = createRoot(container)
@@ -62,14 +91,22 @@ it('persists Motion OFF through remount and cancels background pointer movement'
     const pointer = new Event('pointermove'); Object.assign(pointer,{pointerType:'mouse',clientX:0,clientY:0})
     window.dispatchEvent(pointer)
     frames.at(-1)?.(0)
-    expect(container.querySelector<HTMLElement>('.video-background__scene')!.style.transform).toContain('translate3d(-12px')
+    expect(container.querySelector<HTMLElement>('.video-background__scene')!.style.getPropertyValue('--album-x')).toBe('44%')
+    expect(container.querySelector<HTMLElement>('.video-background__scene')!.style.getPropertyValue('--album-y')).toBe('44%')
+    expect(container.querySelector<HTMLElement>('.video-background__scene')!.style.transform).toBe('none')
     expect(renders).toBe(before)
+    window.dispatchEvent(new CustomEvent('musicwall:wallpaper-pointer', {detail:{x:window.innerWidth,y:window.innerHeight,inside:true}}))
+    frames.at(-1)?.(0)
+    expect(container.querySelector<HTMLElement>('.video-background__scene')!.style.getPropertyValue('--album-y')).toBe('56%')
     await act(async () => { container.querySelector<HTMLInputElement>('input[aria-label="Motion"]')!.click() })
     expect(container.querySelector('.app-shell')?.getAttribute('data-motion')).toBe('off')
     expect(container.querySelector<HTMLElement>('.video-background__scene')!.style.transform).toBe('none')
+    expect(container.querySelector<HTMLElement>('.video-background__scene')!.style.getPropertyValue('--album-y')).toBe('')
+    expect(container.querySelector<HTMLElement>('.video-background__idle')!.dataset.moving).toBe('false')
     expect(cancel).toHaveBeenCalled()
     const requestCount = frame.mock.calls.length
     window.dispatchEvent(pointer)
+    window.dispatchEvent(new CustomEvent('musicwall:wallpaper-pointer', {detail:{x:0,y:0,inside:true}}))
     expect(frame).toHaveBeenCalledTimes(requestCount)
     await act(async () => { root.render(null) })
     await act(async () => { root.render(createElement(Probe)) })

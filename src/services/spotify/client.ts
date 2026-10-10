@@ -7,16 +7,18 @@ export class SpotifyApiError extends Error {
   }
 }
 
-type RequestOptions = { method?: 'GET' | 'PUT' | 'POST'; signal?: AbortSignal; body?: unknown }
+type RequestOptions = { method?: 'GET' | 'PUT' | 'POST'; signal?: AbortSignal; body?: unknown; onTiming?: (sentAt: number, receivedAt: number) => void }
 
 async function authorizedFetch(path: string, options: RequestOptions, retryAuth: boolean): Promise<Response> {
   const accessToken = await spotifyAuth.getAccessToken()
+  const sentAt = performance.now()
   const response = await fetch(`https://api.spotify.com/v1${path}`, {
     method: options.method ?? 'GET',
     headers: { Authorization: `Bearer ${accessToken}`, ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     signal: options.signal,
   })
+  const receivedAt = performance.now()
   if (response.status === 401 && retryAuth) {
     await spotifyAuth.getAccessToken(true)
     return authorizedFetch(path, options, false)
@@ -28,6 +30,7 @@ async function authorizedFetch(path: string, options: RequestOptions, retryAuth:
     const retryAfter = Number(response.headers.get('Retry-After') ?? 0)
     throw new SpotifyApiError(response.status, detail || `Spotify request failed (${response.status}).`, Number.isFinite(retryAfter) ? retryAfter : 0)
   }
+  options.onTiming?.(sentAt, receivedAt)
   return response
 }
 

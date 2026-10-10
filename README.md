@@ -1,6 +1,18 @@
-# MusicWall
+# Spontaneous
 
 A cinematic, single-screen music player built with React, Vite, Tailwind CSS, TypeScript, Framer Motion, and Lucide React. It starts with a local mock playlist and can connect to Spotify for current playback state and remote controls.
+
+## Windows download
+
+[Download Spontaneous Setup for Windows x64](https://github.com/nivedsanthosholiyil-cyber/wallplayer/releases/download/v0.1.0-preview.1/Spontaneous-Setup-0.1.0-x64.exe). This is a preview build; see the [release notes](https://github.com/nivedsanthosholiyil-cyber/wallplayer/releases/tag/v0.1.0-preview.1) and [verification report](docs/windows-installer-verification.md).
+
+Run the single setup file and choose an installation folder. No separate Node.js installation or development server is needed. The **Startup options** page offers **Open Spontaneous when Windows starts**. It is unchecked for a fresh installation; enabling it opens the app as your live wallpaper when you sign in to Windows. Updates preserve the choice. You can disable it later in Windows Settings → Apps → Startup.
+
+The installer includes the Spontaneous application icon, desktop/tray controls, local music, theme artwork and the production frontend/server. It is unsigned. Full installation, update, uninstall and a Windows reboot have not yet been manually verified.
+
+Spotify users must use a public Client ID permitted for their account. Enter it in Settings and register **`http://127.0.0.1:4173/callback`** in that Spotify application's dashboard. Development-mode Spotify applications may require the developer to allow your account. Use an active Spotify desktop/phone playback device; protected in-app Spotify streaming is unverified in Electron. Local audio does not require Spotify. See [desktop configuration](docs/windows-desktop.md).
+
+The name is now Spontaneous; the existing MusicWall application ID, storage directories and saved preferences are preserved.
 
 ## Run locally
 
@@ -18,7 +30,7 @@ Open `http://127.0.0.1:5173/`. For a production check, run `npm run build`; run 
 3. Paste its public **Client ID** into MusicWall Settings, then choose **Connect Spotify**. Alternatively, copy `.env.example` to `.env.local`, set `VITE_SPOTIFY_CLIENT_ID`, and restart Vite. Never put a client secret in a `VITE_` variable.
 4. Play a track on an active Spotify device. MusicWall detects the track and uses its playback position. Spotify's remote playback controls generally require Premium and an available, unrestricted device.
 
-The browser uses Authorization Code with PKCE. Access and refresh tokens are held in session storage and cleared on Disconnect. The Client ID is public and saved in local storage when entered in Settings. The app requests `user-read-playback-state`, `user-read-currently-playing`, `streaming`, and `user-modify-playback-state`.
+The app uses Authorization Code with PKCE. Browser tokens persist in origin-local storage; desktop tokens are encrypted using Windows DPAPI. Disconnect clears the saved connection. The short-lived PKCE transaction stays in session storage. The Client ID is public and saved locally when entered in Settings. The app requests `user-read-playback-state`, `user-read-currently-playing`, `streaming`, and `user-modify-playback-state`.
 
 ## Current behavior
 

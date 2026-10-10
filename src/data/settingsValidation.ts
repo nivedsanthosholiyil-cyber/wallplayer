@@ -28,6 +28,7 @@ const appearanceRules: Rules<typeof defaultAppearance> = {
   logoSize: [12, 36], logoOpacity: [10, 100], logoPosition: ['top-left', 'top-center', 'bottom-left'], logoStyle: ['wordmark', 'monogram', 'symbol'],
 }
 const wallpaperRules: Rules<typeof defaultWallpaper> = {
+  motionStyle: ['parallax', 'ambient', 'both'],
   backgroundMode: ['auto', 'album-art', 'track-visual'], source: ['current', 'static', 'video', 'custom'], preset: ['cinematic', 'midnight', 'noir', 'dream', 'neon', 'minimal'],
   brightness: [50, 150], contrast: [50, 160], saturation: [0, 180], blur: [0, 16], vignette: [0, 100], overlayOpacity: [0, 140], colorTemperature: [-100, 100], backgroundOpacity: [30, 100], motionIntensity: [0, 100], videoSpeed: [.5, 2], position: ['cover', 'fill', 'center', 'custom'], customX: [0, 100], customY: [0, 100],
 }

@@ -50,6 +50,7 @@ export interface WallpaperSettings {
   overlayOpacity: number
   colorTemperature: number
   backgroundOpacity: number
+  motionStyle: 'parallax' | 'ambient' | 'both'
   motionIntensity: number
   videoSpeed: number
   loopVideo: boolean
@@ -72,7 +73,7 @@ export const defaultWallpaper: WallpaperSettings = {
   backgroundMode: 'auto',
   source: 'current', preset: 'cinematic', brightness: 100, contrast: 107, saturation: 103, blur: 0,
   vignette: 40, overlayOpacity: 100, colorTemperature: 0, backgroundOpacity: 100,
-  motionIntensity: 50, videoSpeed: 1, loopVideo: true, pauseWhenInactive: true,
+  motionStyle: 'both', motionIntensity: 50, videoSpeed: 1, loopVideo: true, pauseWhenInactive: true,
   position: 'cover', customX: 50, customY: 50,
 }
 

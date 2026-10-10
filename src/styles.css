@@ -22,6 +22,12 @@ button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #b8e7e8; outline-offset: 3px; }
 ::selection { background: #b1dedf; color: #09202c; }
 
+/* The player is an interactive display, not a selectable document. Keep text
+   editing available in forms without drag-selection covering lyrics/controls. */
+.app-main, .player-controls, .app-brand, .video-background { -webkit-user-select: none; user-select: none; }
+.app-main img, .player-controls img { -webkit-user-drag: none; }
+.app-main :is(input, textarea, [contenteditable="true"]) { -webkit-user-select: text; user-select: text; }
+
 .app-shell { @apply relative isolate text-white; --ui-rgb: 8 23 32; width: 100%; height: 100svh; overflow: clip; }
 .app-shell[data-ui-theme="midnight"] { --ui-rgb: 6 13 31; }
 .app-shell[data-ui-theme="noir"] { --ui-rgb: 10 10 12; }
@@ -31,6 +37,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .video-background { z-index: -1; overflow: hidden; background: #07121b; }
 .video-background__media { width: 100%; height: 100%; object-fit: var(--wallpaper-fit, cover); opacity: var(--wallpaper-opacity, 1); filter: brightness(var(--wallpaper-brightness, 100%)) contrast(var(--wallpaper-contrast, 107%)) saturate(var(--wallpaper-saturation, 103%)) blur(var(--wallpaper-blur, 0px)); }
 .video-background__image { background-position: var(--wallpaper-position, center center); background-size: var(--wallpaper-size, cover); background-repeat: no-repeat; }
+.video-background__image[data-moving="true"] { animation-name: wallpaper-ambient; animation-timing-function: ease-in-out; animation-iteration-count: infinite; animation-direction: alternate; will-change: transform; }
+@keyframes wallpaper-ambient { from { transform: scale(1) translateX(0); } to { transform: scale(var(--ambient-scale, 1.025)) translateX(var(--ambient-drift, -.25%)); } }
+@media (prefers-reduced-motion: reduce) { .video-background__image[data-moving="true"] { animation: none; } }
 .video-background__temperature { mix-blend-mode: soft-light; pointer-events: none; }
 .video-background__artwork-tint { background-size: cover; background-position: center; filter: blur(90px) saturate(.8); opacity: .1; mix-blend-mode: screen; }
 .video-background__wash { opacity: var(--wallpaper-wash, 1); background: linear-gradient(180deg, rgba(3, 11, 19, .39) 0%, rgba(5, 16, 25, .16) 32%, rgba(5, 15, 23, .3) 57%, rgba(2, 9, 15, .7) 100%); }
@@ -62,6 +71,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .lyric-status { max-width: 520px; margin: -18px auto 0; color: rgba(231, 245, 245, .52); font-size: clamp(16px, 1.8vw, 22px); font-weight: 400; letter-spacing: -.02em; text-align: center; text-shadow: 0 4px 24px rgba(0, 0, 0, .3); }
 .lyrics__stage { display: grid; place-items: center; width: 100%; min-height: 330px; }
 .lyrics__lines { display: flex; flex-direction: column; align-items: var(--line-alignment); justify-content: center; gap: 36px; width: 100%; }
+.lyrics__stage > .lyrics__lines { grid-area: 1 / 1; }
 .lyrics__adjacent { min-height: 43px; max-width: 95%; margin: 0; padding: 0 12px; color: rgba(225, 237, 238, var(--adjacent-opacity)); filter: blur(var(--adjacent-blur)); font-size: clamp(calc(18px * var(--lyric-scale) * var(--preset-size)), calc(2vw * var(--lyric-scale) * var(--preset-size)), calc(27px * var(--lyric-scale) * var(--preset-size))); font-weight: var(--lyric-weight); line-height: calc(var(--lyric-leading) + .22); letter-spacing: var(--lyric-spacing); }
 .lyrics__current { max-width: 100%; margin: 0; color: #fbfefe; opacity: var(--current-opacity); font-size: clamp(calc(34px * var(--lyric-scale) * var(--preset-size)), calc(4.7vw * var(--lyric-scale) * var(--preset-size)), calc(70px * var(--lyric-scale) * var(--preset-size))); font-weight: var(--lyric-weight); line-height: var(--lyric-leading); letter-spacing: var(--lyric-spacing); text-wrap: balance; text-shadow: 0 5px 26px rgba(0, 0, 0, .3), 0 0 calc(34px * var(--lyric-glow)) rgba(202, 239, 243, var(--lyric-glow)); }
 .lyrics--minimal .lyrics__stage { min-height: 150px; }
@@ -517,8 +527,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .spotify-track-meta__text { min-width: 0; flex: 1; }
 .spotify-track-meta > img, .spotify-track-meta > .track-visual-menu { flex-shrink: 0; }
 .spotify-track-meta small { margin-top: 3px; font-size: 11px; opacity: .85; }
-.lyrics-plain { max-height: 40svh; width: min(700px, 90%); overflow: hidden; text-align: center; color: rgba(231,245,245,.85); font-size: clamp(18px,2vw,26px); line-height: 1.7; padding: 24px 0; }
-.lyrics-plain p { margin: .4em 0; }
+.lyrics-plain { width: min(700px, 90%); max-height: 45svh; gap: 18px; }
+.lyrics-plain__notice, .lyrics-plain__pages { flex: 0 0 auto; margin: 0; color: rgba(231,245,245,.7); font: 11px Inter, sans-serif; text-shadow: 0 1px 5px #000; }
+.lyrics-plain__content { width: 100%; height: 28svh; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: .5em; font-size: clamp(calc(20px * var(--lyric-scale)), calc(3vw * var(--lyric-scale)), calc(36px * var(--lyric-scale))); font-weight: var(--lyric-weight); letter-spacing: var(--lyric-spacing); line-height: var(--lyric-leading); opacity: var(--current-opacity); overflow-wrap: anywhere; text-shadow: 0 2px 12px #000, 0 0 24px rgb(218 244 245 / var(--lyric-glow)); }
+.lyrics-plain__content p { margin: 0; flex: 0 0 auto; }
+.lyrics-plain__pages { display: flex; align-items: center; gap: 18px; }
+.lyrics-plain__pages button { width: 36px; height: 36px; border: 0; border-radius: 50%; background: rgb(8 23 32 / .35); color: white; font-size: 22px; }
+.lyrics-plain__pages button:hover { background: rgb(8 23 32 / .65); }
+.lyrics-plain__pages button:disabled { opacity: .25; cursor: default; }
 
 .video-background { position: fixed; }
 .video-background__layer { position: absolute; inset: 0; }
@@ -616,6 +632,21 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 
 /* Shared motion tokens only affect movement, never theme colors or static icon geometry. */
 .video-background__scene { position: absolute; inset: -12px; transition: transform 1.2s ease-out; }
+.video-background__idle { position: absolute; inset: 0; }
+.video-background__idle[data-moving="true"] { inset: -14px; animation-name: wallpaper-idle-drift; animation-timing-function: ease-in-out; animation-iteration-count: infinite; will-change: transform; }
+@property --album-idle { syntax: "<percentage>"; inherits: true; initial-value: 0%; }
+@property --album-x { syntax: "<percentage>"; inherits: true; initial-value: 50%; }
+@property --album-y { syntax: "<percentage>"; inherits: true; initial-value: 50%; }
+.video-background__scene[data-album-art="true"] { inset: 0; transition: --album-x 1.2s ease-out, --album-y 1.2s ease-out; }
+.video-background__scene[data-album-art="true"] .video-background__idle[data-moving="true"] { inset: 0; animation-name: album-idle-pan; will-change: auto; }
+@keyframes album-idle-pan { 0%, 100% { --album-idle: 0%; } 25% { --album-idle: var(--album-travel); } 75% { --album-idle: calc(var(--album-travel) * -1); } }
+@keyframes wallpaper-idle-drift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  25% { transform: translate3d(var(--idle-x), calc(var(--idle-y) * -.5), 0); }
+  50% { transform: translate3d(0, var(--idle-y), 0); }
+  75% { transform: translate3d(calc(var(--idle-x) * -1), calc(var(--idle-y) * -.5), 0); }
+}
+@media (prefers-reduced-motion: reduce) { .video-background__idle[data-moving="true"] { animation: none; transform: none; inset: 0; } }
 .music-browser__tile { transition: transform var(--motion-duration, .35s) ease-out; }
 .music-browser__tile:hover, .music-browser__tile:focus-within { transform: translateY(var(--motion-hover-rise, -2px)); }
 .music-browser__tile:hover .music-browser__art-button img, .music-browser__tile:focus-within .music-browser__art-button img { transform: scale(var(--motion-hover-scale, 1.015)); filter: brightness(1.06); }

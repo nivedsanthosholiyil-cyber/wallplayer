@@ -34,17 +34,30 @@ let clientId = configuredClientId || savedClientId()
 const redirectUri = import.meta.env.VITE_SPOTIFY_REDIRECT_URI?.trim() || `${window.location.origin}/callback`
 const listeners = new Set<() => void>()
 
-function readStorage<T>(key: string): T | null {
+function readStorage<T>(key: string, storage: Storage = sessionStorage): T | null {
   try {
-    const raw = sessionStorage.getItem(key)
+    const raw = storage.getItem(key)
     return raw ? JSON.parse(raw) as T : null
   } catch { return null }
 }
 
-let tokens = readStorage<TokenRecord>(tokenKey)
-if (tokens?.clientId !== clientId) tokens = null
+function usableTokens(value: unknown): value is TokenRecord {
+  const record = value as TokenRecord | null
+  return Boolean(record && record.clientId === clientId && typeof record.accessToken === 'string' && record.accessToken
+    && typeof record.refreshToken === 'string' && record.refreshToken && Number.isFinite(record.expiresAt) && typeof record.scope === 'string')
+}
+const credentialStore = window.musicwallSpotifySession
+const desktopBuild = import.meta.env.MODE === 'desktop'
+const storedTokens = readStorage<unknown>(tokenKey, credentialStore || desktopBuild ? sessionStorage : localStorage)
+const legacyTokens = readStorage<unknown>(tokenKey)
+let tokens: TokenRecord | null = usableTokens(storedTokens) ? storedTokens : usableTokens(legacyTokens) ? legacyTokens : null
+if (!credentialStore && !desktopBuild && tokens) {
+  // Preserve existing browser sessions, while moving credentials out of tab-only storage.
+  try { localStorage.setItem(tokenKey, JSON.stringify(tokens)); sessionStorage.removeItem(tokenKey) } catch { /* Current session still works. */ }
+}
+let authRevision = 0
 let authState: SpotifyAuthState = {
-  status: !clientId ? 'unconfigured' : tokens ? 'connected' : 'disconnected',
+  status: !clientId ? 'unconfigured' : credentialStore ? 'connecting' : tokens ? 'connected' : 'disconnected',
   message: !clientId ? 'Add a Spotify Client ID to connect.' : '',
   canControl: Boolean(tokens?.scope.split(' ').includes('user-modify-playback-state')),
   clientId,
@@ -52,14 +65,16 @@ let authState: SpotifyAuthState = {
 }
 let callbackPromise: Promise<void> | null = null
 let refreshPromise: Promise<string> | null = null
+let restorePromise: Promise<void> | null = null
 
 function setAuthState(next: Pick<SpotifyAuthState, 'status' | 'message' | 'canControl'>) {
   authState = { ...next, clientId, configuredByEnv: Boolean(configuredClientId) }
   listeners.forEach((listener) => listener())
 }
 
-function saveTokens(payload: { access_token: string; refresh_token?: string; expires_in: number; scope?: string }, previousRefresh?: string) {
-  if (!payload.access_token || !(payload.refresh_token || previousRefresh)) throw new Error('Spotify did not return usable credentials.')
+async function saveTokens(payload: { access_token: string; refresh_token?: string; expires_in: number; scope?: string }, previousRefresh?: string, revision = authRevision) {
+  if (revision !== authRevision) throw new Error('Spotify connection changed during authorization.')
+  if (!payload.access_token || !(payload.refresh_token || previousRefresh) || !Number.isFinite(payload.expires_in) || payload.expires_in <= 0) throw new Error('Spotify did not return usable credentials.')
   const nextTokens: TokenRecord = {
     clientId,
     accessToken: payload.access_token,
@@ -67,9 +82,51 @@ function saveTokens(payload: { access_token: string; refresh_token?: string; exp
     expiresAt: Date.now() + payload.expires_in * 1000,
     scope: payload.scope ?? tokens?.scope ?? '',
   }
-  sessionStorage.setItem(tokenKey, JSON.stringify(nextTokens))
+  if (credentialStore) await credentialStore.write(nextTokens)
+  else {
+    if (desktopBuild) throw new Error('Windows credential protection is unavailable. Restart MusicWall and connect again.')
+    localStorage.setItem(tokenKey, JSON.stringify(nextTokens))
+  }
+  if (revision !== authRevision) throw new Error('Spotify connection changed during authorization.')
+  sessionStorage.removeItem(tokenKey)
   tokens = nextTokens
   setAuthState({ status: 'connected', message: '', canControl: tokens.scope.split(' ').includes('user-modify-playback-state') })
+}
+
+function forgetTokens() {
+  authRevision++
+  tokens = null
+  sessionStorage.removeItem(tokenKey)
+  localStorage.removeItem(tokenKey)
+  if (credentialStore) void credentialStore.clear().catch(() => {
+    setAuthState({ status: authState.status, message: 'Could not remove the saved Spotify connection. Try Disconnect again.', canControl: false })
+  })
+}
+
+if (credentialStore) {
+  const revision = authRevision
+  restorePromise = (async () => {
+    try {
+      const saved = await credentialStore.read()
+      if (revision !== authRevision) return
+      const restored = usableTokens(saved) ? saved : tokens
+      if (restored) {
+        await credentialStore.write(restored)
+        if (revision !== authRevision) return
+        tokens = restored
+        sessionStorage.removeItem(tokenKey); localStorage.removeItem(tokenKey)
+      }
+      setAuthState({ status: !clientId ? 'unconfigured' : tokens ? 'connected' : 'disconnected', message: '', canControl: Boolean(tokens?.scope.split(' ').includes('user-modify-playback-state')) })
+    } catch {
+      if (revision === authRevision) setAuthState({ status: 'error', message: 'Could not restore the saved Spotify connection. Connect again.', canControl: false })
+    }
+  })().finally(() => { restorePromise = null })
+}
+
+class TokenEndpointError extends Error {
+  constructor(public reconnect: boolean) {
+    super(reconnect ? 'Spotify authorization expired. Connect again.' : 'Spotify authorization is temporarily unavailable. Retrying when online.')
+  }
 }
 
 async function requestToken(body: URLSearchParams) {
@@ -78,7 +135,11 @@ async function requestToken(body: URLSearchParams) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
   })
-  if (!response.ok) throw new Error(response.status === 400 ? 'Spotify authorization expired. Connect again.' : 'Spotify authorization is unavailable.')
+  if (!response.ok) {
+    let invalidGrant = false
+    try { invalidGrant = (await response.json() as { error?: string }).error === 'invalid_grant' } catch { /* Non-JSON service failures are temporary. */ }
+    throw new TokenEndpointError(invalidGrant)
+  }
   return response.json() as Promise<{ access_token: string; refresh_token?: string; expires_in: number; scope?: string }>
 }
 
@@ -112,6 +173,7 @@ export function buildSpotifyAuthorizationUrl(publicClientId: string, callback: s
 }
 
 export const spotifyAuth = {
+  ready: () => restorePromise ?? Promise.resolve(),
   connectLibrary: () => spotifyAuth.connect(true),
   hasScope: (scope: string) => Boolean(tokens?.scope.split(' ').includes(scope)),
   canStream: () => Boolean(tokens?.scope.split(' ').includes('streaming')),
@@ -123,12 +185,14 @@ export const spotifyAuth = {
   },
   setClientId(value: string) {
     if (configuredClientId || authState.status === 'connected') return
+    authRevision++
     clientId = value.trim()
     if (clientId) localStorage.setItem('musicwall.spotify.client-id.v1', clientId)
     else localStorage.removeItem('musicwall.spotify.client-id.v1')
     setAuthState({ status: clientId ? 'disconnected' : 'unconfigured', message: clientId ? '' : 'Add a Spotify Client ID to connect.', canControl: false })
   },
   async connect(includeLibrary = false) {
+    if (restorePromise) await restorePromise
     if (!clientId) throw new Error('Add a Spotify Client ID in Settings to connect.')
     const destination = new URL(redirectUri)
     if (destination.origin !== window.location.origin) throw new Error(`Open MusicWall at ${destination.origin} before connecting.`)
@@ -145,6 +209,8 @@ export const spotifyAuth = {
     const error = params.get('error')
     if (!code && !error) return Promise.resolve()
     callbackPromise = (async () => {
+      if (restorePromise) await restorePromise
+      const revision = authRevision
       const transaction = readStorage<AuthTransaction>(transactionKey)
       sessionStorage.removeItem(transactionKey)
       clearCallbackUrl()
@@ -166,14 +232,15 @@ export const spotifyAuth = {
           client_id: clientId, grant_type: 'authorization_code', code,
           redirect_uri: redirectUri, code_verifier: transaction.verifier,
         }))
-        saveTokens(result)
+        await saveTokens(result, undefined, revision)
       } catch (cause) {
-        setAuthState({ status: 'error', message: cause instanceof Error ? cause.message : 'Spotify connection failed.', canControl: false })
+        if (revision === authRevision) setAuthState({ status: 'error', message: cause instanceof Error ? cause.message : 'Spotify connection failed.', canControl: false })
       }
     })().finally(() => { callbackPromise = null })
     return callbackPromise
   },
   async getAccessToken(forceRefresh = false): Promise<string> {
+    if (restorePromise) await restorePromise
     if (!tokens) throw new Error('Spotify is not connected.')
     if (!forceRefresh && tokens.expiresAt - Date.now() > 60_000) return tokens.accessToken
     if (refreshPromise) return refreshPromise
@@ -185,27 +252,29 @@ export const spotifyAuth = {
           client_id: clientId, grant_type: 'refresh_token', refresh_token: previousRefresh,
         }))
         if (tokens !== refreshingTokens) throw new Error('Spotify connection changed during refresh.')
-        saveTokens(result, previousRefresh)
+        await saveTokens(result, previousRefresh)
         return result.access_token
-      } catch {
+      } catch (cause) {
         if (tokens !== refreshingTokens) throw new Error('Spotify connection changed during refresh.')
-        tokens = null
-        sessionStorage.removeItem(tokenKey)
-        setAuthState({ status: 'expired', message: 'Spotify session expired. Connect again.', canControl: false })
-        throw new Error('Spotify session expired. Connect again.')
+        if (cause instanceof TokenEndpointError && cause.reconnect) {
+          forgetTokens()
+          setAuthState({ status: 'expired', message: 'Spotify session expired. Connect again.', canControl: false })
+          throw new Error('Spotify session expired. Connect again.')
+        }
+        // Startup can precede network availability. Keep the refresh token on
+        // offline/5xx/rate-limit failures so the existing poller can retry.
+        throw new Error('Spotify could not reconnect right now. Retrying when online.')
       } finally { refreshPromise = null }
     })()
     return refreshPromise
   },
   disconnect() {
-    tokens = null
-    sessionStorage.removeItem(tokenKey)
+    forgetTokens()
     sessionStorage.removeItem(transactionKey)
     setAuthState({ status: clientId ? 'disconnected' : 'unconfigured', message: '', canControl: false })
   },
   invalidate() {
-    tokens = null
-    sessionStorage.removeItem(tokenKey)
+    forgetTokens()
     setAuthState({ status: 'expired', message: 'Spotify session expired. Connect again.', canControl: false })
   },
 }

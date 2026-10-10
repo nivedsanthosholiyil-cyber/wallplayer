@@ -10,9 +10,9 @@ function verified(message) {
 
 // Trusted main-process-only protocol. No renderer IPC or arbitrary executable paths.
 class WallpaperController extends EventEmitter {
-  constructor({ source, runtime, handle, parentPid = process.pid, spawnImpl = spawn, timeoutMs = 20000 }) {
+  constructor({ source, runtime, handle, inputHandle, parentPid = process.pid, spawnImpl = spawn, timeoutMs = 20000 }) {
     super()
-    Object.assign(this, { source, runtime, handle, parentPid, spawnImpl, timeoutMs })
+    Object.assign(this, { source, runtime, handle, inputHandle, parentPid, spawnImpl, timeoutMs })
     this.mode = 'window'; this.pending = new Map(); this.sequence = 0; this.stopping = false
   }
   start(mode = 'wallpaper') {
@@ -26,7 +26,7 @@ class WallpaperController extends EventEmitter {
       this.starting = { resolve, reject, timer }
       try {
         this.child = this.spawnImpl(shell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', join(this.runtime, 'wallpaper-host.ps1'),
-          '-WindowHandle', this.handle, '-ParentPid', String(this.parentPid), '-InitialMode', mode],
+          '-WindowHandle', this.handle, '-ParentPid', String(this.parentPid), '-InitialMode', mode, ...(this.inputHandle ? ['-InputHandle', this.inputHandle] : [])],
         { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
       } catch (error) { this.fail(error); return }
       this.stderr = ''
@@ -54,12 +54,17 @@ class WallpaperController extends EventEmitter {
       this.emit('window-lost'); return
     }
     if (message.type === 'recovering') {
-      this.lastHeartbeat = Date.now(); this.emit('recovering'); return
+      this.recovering = true; this.lastHeartbeat = Date.now(); this.emit('recovering'); return
     }
     if (!['ready', 'mode', 'heartbeat'].includes(message.type)) throw new Error('Invalid wallpaper helper response')
     if (!verified(message)) throw new Error('Wallpaper attachment was not verified by Windows')
     if (message.type === 'ready' && message.mode !== this.initialMode) throw new Error('Unexpected initial wallpaper mode')
     if (message.type === 'heartbeat' && message.mode !== this.mode) throw new Error('Unexpected wallpaper heartbeat mode')
+    if (message.type === 'mode') {
+      const request = this.pending.get(message.id)
+      if (!request || request.mode !== message.mode) throw new Error('Unexpected wallpaper mode acknowledgement')
+    }
+    this.recovering = false
     this.lastHeartbeat = Date.now()
     this.mode = message.mode
     this.details = message.details

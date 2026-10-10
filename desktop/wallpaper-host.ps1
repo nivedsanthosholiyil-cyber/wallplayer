@@ -1,5 +1,6 @@
 param(
   [string]$WindowHandle,
+  [string]$InputHandle,
   [int]$ParentPid,
   [ValidateSet('wallpaper','window')][string]$InitialMode = 'wallpaper',
   [switch]$Probe
@@ -22,6 +23,7 @@ try {
     exit 0
   }
   $native = [MusicWallWallpaper]::new($WindowHandle, [uint32]$ParentPid)
+  if ($InputHandle) { $native.SetInputWindow($InputHandle, [uint32]$ParentPid) }
   $mode = $InitialMode
   if ($mode -eq 'wallpaper') { $details = $native.EnsureAttached() }
   else { $native.Restore($true); $details = $native.InspectNormal() }

@@ -38,7 +38,7 @@ function LyricStream({ view, trackId, style, maxVisibleLines, minimal }: LyricSt
 
   return (
     <div className="lyrics__stage">
-      <AnimatePresence mode="wait" initial={false}>
+      <AnimatePresence mode="sync" initial={false}>
         <motion.div
           className="lyrics__lines"
           key={`${trackId}-${view.current?.id ?? `gap-${view.previous?.id ?? ''}-${view.next?.id ?? ''}`}`}

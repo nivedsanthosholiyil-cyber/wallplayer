@@ -87,6 +87,29 @@ it('waits for process close after requesting forced termination', async () => {
   expect(child.kill).toHaveBeenCalledOnce(); expect(settled).toBe(false)
   child.emit('close', 1); await expect(stop).resolves.toEqual({ exited: true, forced: true })
 })
+it('retains wallpaper mode through temporary Explorer host loss and accepts verified reattachment', async () => {
+  const { host, send } = await fixture(); const start = host.start(); send(attached); await start
+  const failure = vi.fn(); host.on('failure', failure)
+  send({ type: 'recovering' }); expect(host.recovering).toBe(true)
+  expect(host.mode).toBe('wallpaper')
+  send({ type: 'heartbeat', mode: 'wallpaper', details: { Verified: true, Parent: 202, Width: 1920, Height: 1080 } })
+  expect(host.recovering).toBe(false); expect(host.details.Parent).toBe(202)
+  expect(failure).not.toHaveBeenCalled()
+})
+it('rejects unrelated acknowledgements without changing verified native mode', async () => {
+  const { host, send } = await fixture(); const start = host.start(); send(attached); await start
+  const failure = vi.fn(); host.on('failure', failure)
+  send({ type: 'mode', id: 99, mode: 'window', details: { Verified: true, Parent: 0 } })
+  expect(failure).toHaveBeenCalledOnce(); expect(host.mode).toBe('wallpaper')
+  expect(host.details.Parent).toBe(101)
+})
+it('does not report intentional shutdown as a crash', async () => {
+  const { host, child, send } = await fixture(); const start = host.start(); send(attached); await start
+  const failure = vi.fn(); host.on('failure', failure)
+  const stop = host.stop(); child.emit('close', 0)
+  await expect(stop).resolves.toEqual({ exited: true, forced: false })
+  expect(failure).not.toHaveBeenCalled()
+})
 it.runIf(process.platform === 'win32')('compiles the actual native helper and probes the real desktop without changing it', async () => {
   const { stdout } = await promisify(execFile)('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', resolve('desktop/wallpaper-host.ps1'), '-Probe'], { windowsHide: true, timeout: 15000 })
   const probe = JSON.parse(stdout.trim())
@@ -97,4 +120,28 @@ it.runIf(process.platform === 'win32')('compiles the actual native helper and pr
 it.runIf(process.platform === 'win32')('refuses a HWND that does not belong to the specified Electron parent', async () => {
   await expect(promisify(execFile)('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', resolve('desktop/wallpaper-host.ps1'), '-WindowHandle', '0', '-ParentPid', String(process.pid)], { windowsHide: true, timeout: 15000 }))
     .rejects.toMatchObject({ code: 1, stdout: expect.stringContaining('does not belong') })
+}, 20000)
+it.runIf(process.platform === 'win32')('keeps the keyboard input surface an activatable popup without caption or desktop-child flags', async () => {
+  const source = resolve('desktop/wallpaper-native.cs').replaceAll("'", "''")
+  const script = `Add-Type -TypeDefinition ([IO.File]::ReadAllText('${source}')); [MusicWallWallpaper]::InputStyle(0x51CF0000) | ConvertTo-Json -Compress`
+  const { stdout } = await promisify(execFile)('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 15000 })
+  const style = Number(JSON.parse(stdout.trim())) >>> 0
+  expect(style >>> 31).toBe(1)
+  expect(style & 0x41CF0000).toBe(0)
+  expect(style & 0x10000000).toBe(0x10000000)
+}, 20000)
+it.runIf(process.platform === 'win32')('preserves surface ownership when applying raised-desktop and classic window styles', async () => {
+  const source = resolve('desktop/wallpaper-native.cs').replaceAll("'", "''")
+  const script = `Add-Type -TypeDefinition ([IO.File]::ReadAllText('${source}')); $normal=New-Object MusicWallWallpaper+Rect; $normal.Left=280; $normal.Top=66; $normal.Right=1640; $normal.Bottom=966; $minimized=New-Object MusicWallWallpaper+Rect; $minimized.Left=-32000; $minimized.Top=-32000; $minimized.Right=-31840; $minimized.Bottom=-31961; @{ raised=[MusicWallWallpaper]::WallpaperExStyle(0x240000,$true); classic=[MusicWallWallpaper]::WallpaperExStyle(0x240000,$false); input=[MusicWallWallpaper]::InputExStyle(0x8240000); normal=[MusicWallWallpaper]::UsableNormalBounds($normal); minimized=[MusicWallWallpaper]::UsableNormalBounds($minimized) } | ConvertTo-Json -Compress`
+  const { stdout } = await promisify(execFile)('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 15000 })
+  const styles = JSON.parse(stdout.trim())
+  expect(styles.raised & 0x200000).toBe(0x200000)
+  expect(styles.raised & 0x80000).toBe(0x80000)
+  expect(styles.raised & 0x40000).toBe(0)
+  expect(styles.raised & 0x8000080).toBe(0x8000080)
+  expect(styles.classic & 0x200000).toBe(0x200000)
+  expect(styles.input & 0x8240000).toBe(0)
+  expect(styles.input & 0x80080).toBe(0x80080)
+  expect(styles.normal).toBe(true)
+  expect(styles.minimized).toBe(false)
 }, 20000)
