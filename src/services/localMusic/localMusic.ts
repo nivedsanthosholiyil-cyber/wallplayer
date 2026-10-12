@@ -30,7 +30,7 @@ function openDatabase() {
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error ?? new Error('Could not open local music storage.'))
-    request.onblocked = () => reject(new Error('Close other MusicWall tabs to update local music storage.'))
+    request.onblocked = () => reject(new Error('Close other Spontaneous tabs to update local music storage.'))
   }).catch((error: unknown) => {
     databasePromise = null
     throw error

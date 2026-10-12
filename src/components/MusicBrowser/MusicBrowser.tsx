@@ -105,14 +105,20 @@ export function MusicBrowser(props: MusicBrowserProps) {
   const recentTracks = [...recent, ...remote.home.recent.map((track): RecentTrack => ({ track, source: 'spotify' }))].filter((entry) => { const key = `${entry.source}:${entry.track.id}`; if (seen.has(key) || entry.source === 'local' && !localTracks.some((track) => track.id === entry.track.id)) return false; seen.add(key); return true }).slice(0,12)
   const home: DiscoverySection[] = [
     { id: 'recent', title: 'RECENTLY PLAYED', items: recentTracks.map((entry) => trackItem(entry.track, entry.source)) },
-    { id: 'made', title: 'MADE FOR YOU', items: remote.home.saved.length ? remote.home.saved.map((track) => trackItem(track,'spotify')) : catalog.getHome([])[1].items, note: remote.home.saved.length ? 'From your saved Spotify music' : 'MusicWall sample collection' },
+    { id: 'made', title: 'MADE FOR YOU', items: remote.home.saved.length ? remote.home.saved.map((track) => trackItem(track,'spotify')) : catalog.getHome([])[1].items, note: remote.home.saved.length ? 'From your saved Spotify music' : 'Spontaneous sample collection' },
     { id: 'playlists', title: 'YOUR PLAYLISTS', items: [...playlists.map((playlist) => localPlaylistItem(playlist, localTracks)), ...remote.home.playlists, ...(!spotifyConnected ? catalog.getHome([])[2].items : [])] },
   ]
   async function play(track: Track, source: RecentTrack['source'], queue?: Track[], shuffle = false) {
     if (playing) return
     setNotice(''); setPlaying(true)
     try {
-      if (source === 'spotify') await spotifyMusicBrowser.play(queue || [track], shuffle)
+      if (source === 'spotify') {
+        if (queue) await spotifyMusicBrowser.play(queue, shuffle)
+        else {
+          const following = await spotifyMusicBrowser.playSingle(track, results.songs)
+          setNotice(following ? `${following} songs queued after this track.` : 'Playing this track. Related songs are unavailable right now.')
+        }
+      }
       else if (source === 'local') { if (!onPlayLocalTrack(track.id, (queue || localTracks).filter((entry) => entry.audioSrc))) throw new Error('Relink this file before playing it.') }
       else if (!onPlayTrack(track.id)) throw new Error('This sample track is unavailable.')
       recordBrowserRecent(track, source); setRecent(getBrowserRecent())

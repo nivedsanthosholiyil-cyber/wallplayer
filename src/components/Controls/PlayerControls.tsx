@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { motion } from 'framer-motion'
 import { useMotionSettings } from '../../hooks/useMotionSettings'
 import type { AppearanceSettings } from '../../types/interfaceSettings'
@@ -32,6 +32,16 @@ export function PlayerControls({ currentTime, duration, isPlaying, isMuted, volu
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const controls = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const move = (event: Event) => {
+      const point = (event as CustomEvent<{ x: number; y: number; inside: boolean }>).detail
+      const r = controls.current?.getBoundingClientRect()
+      setHovered(Boolean(r && point.inside && point.x >= r.left && point.x < r.right && point.y >= r.top && point.y < r.bottom))
+    }
+    window.addEventListener('musicwall:wallpaper-pointer', move)
+    return () => window.removeEventListener('musicwall:wallpaper-pointer', move)
+  }, [])
   useEffect(() => {
     if (!dragging) return
     const end = () => setDragging(false)
@@ -58,6 +68,7 @@ export function PlayerControls({ currentTime, duration, isPlaying, isMuted, volu
   const theme = appearance?.theme ?? 'default'
   return (
     <motion.div
+      ref={controls}
       className="player-controls"
       role="group"
       aria-label="Playback controls"
@@ -67,12 +78,12 @@ export function PlayerControls({ currentTime, duration, isPlaying, isMuted, volu
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
       onPointerDownCapture={(event) => { if ((event.target as HTMLElement).matches('input[type="range"]')) setDragging(true) }}
-      onFocusCapture={() => setFocused(true)}
+      onFocusCapture={(event) => setFocused((event.target as HTMLElement).matches(':focus-visible'))}
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false)
       }}
       initial={false}
-      animate={{ opacity: hidden ? 0 : visible ? 1 : restOpacity, y: visible || dissolve || !movement.enabled ? 0 : movement.playerRise * intensity }}
+      animate={{ opacity: hidden ? 0 : visible ? 1 : restOpacity, filter: visible ? 'blur(0px)' : 'blur(2px)', y: visible || dissolve || !movement.enabled ? 0 : movement.playerRise * intensity }}
       transition={{ duration: direct ? 0 : movement.uiDuration * speed, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="player-controls__transport">

@@ -42,10 +42,12 @@ export function WallpaperSettingsPage({ settings, onChange, onPreset, currentVis
       <RangeSetting label="Background opacity" value={settings.backgroundOpacity} unit="%" min={30} max={100} onChange={(value) => onChange('backgroundOpacity', value)} />
     </section>
     <section className="settings-section"><h3>Motion</h3>
+      <Setting label="Wallpaper motion"><select value={settings.motionStyle} onChange={(event) => onChange('motionStyle', event.target.value as WallpaperSettings['motionStyle'])}><option value="off">Off</option><option value="parallax">Parallax only</option><option value="ambient">Breathing only</option><option value="both">Parallax + breathing</option></select></Setting>
+      <p className="settings-note">Parallax follows your mouse. Breathing gently eases in and out while you are still. Choose Parallax only to disable breathing, or Off to disable both. Motion in Appearance must also be enabled.</p>
       <RangeSetting label="Motion intensity" value={settings.motionIntensity} unit="%" min={0} max={100} step={5} onChange={(value) => onChange('motionIntensity', value)} />
       <RangeSetting label="Video playback speed" value={settings.videoSpeed} unit="×" min={0.5} max={2} step={0.05} onChange={(value) => onChange('videoSpeed', value)} />
       <label className="settings-toggle"><span>{spotifyTrack && settings.source === 'current' ? 'Track visuals always loop' : 'Loop video'}</span><input type="checkbox" disabled={Boolean(spotifyTrack && settings.source === 'current')} checked={spotifyTrack && settings.source === 'current' ? true : settings.loopVideo} onChange={(event) => onChange('loopVideo', event.target.checked)} /></label>
-      <label className="settings-toggle"><span>Pause background when inactive</span><input type="checkbox" checked={settings.pauseWhenInactive} onChange={(event) => onChange('pauseWhenInactive', event.target.checked)} /></label>
+      <label className="settings-toggle"><span>Pause background while using other apps</span><input type="checkbox" checked={settings.pauseWhenInactive} onChange={(event) => onChange('pauseWhenInactive', event.target.checked)} /></label>
     </section>
     <section className="settings-section"><h3>Position</h3>
       <Setting label="Image fit"><select value={settings.position} onChange={(event) => onChange('position', event.target.value as WallpaperSettings['position'])}><option value="cover">Cover</option><option value="fill">Fill</option><option value="center">Center</option><option value="custom">Custom position</option></select></Setting>

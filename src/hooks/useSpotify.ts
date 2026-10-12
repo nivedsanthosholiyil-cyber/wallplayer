@@ -69,6 +69,8 @@ export function useSpotify() {
     let timer: number | null = null
     let failureCount = 0
     let controller: AbortController | null = null
+    // Explorer can report an attached, visible wallpaper renderer as inactive.
+    const visible = () => !document.hidden || document.documentElement.hasAttribute('data-wallpaper-input')
 
     function cancelPending() {
       if (timer !== null) window.clearTimeout(timer)
@@ -80,13 +82,13 @@ export function useSpotify() {
     function schedule(delay = 0) {
       if (timer !== null) window.clearTimeout(timer)
       timer = null
-      if (!disposed && !document.hidden && navigator.onLine) {
+      if (!disposed && visible() && navigator.onLine) {
         timer = window.setTimeout(poll, Math.max(delay, rateLimitUntil.current - Date.now()))
       }
     }
 
     async function poll() {
-      if (disposed || document.hidden || !navigator.onLine) return
+      if (disposed || !visible() || !navigator.onLine) return
       controller?.abort()
       const requestController = new AbortController()
       controller = requestController
@@ -122,7 +124,7 @@ export function useSpotify() {
     }
 
     function onVisibility() {
-      if (document.hidden) {
+      if (!visible()) {
         cancelPending()
       } else { cancelPending(); schedule(0) }
     }
@@ -135,6 +137,8 @@ export function useSpotify() {
     scheduleRefresh.current = (delay = 0) => { cancelPending(); schedule(delay) }
     abortPoll.current = cancelPending
     document.addEventListener('visibilitychange', onVisibility)
+    const desktopVisibility = new MutationObserver(onVisibility)
+    desktopVisibility.observe(document.documentElement, { attributes: true, attributeFilter: ['data-wallpaper-input'] })
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
     schedule()
@@ -142,6 +146,7 @@ export function useSpotify() {
       disposed = true
       cancelPending()
       document.removeEventListener('visibilitychange', onVisibility)
+      desktopVisibility.disconnect()
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
       scheduleRefresh.current = null

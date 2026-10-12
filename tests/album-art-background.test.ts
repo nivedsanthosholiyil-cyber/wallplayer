@@ -4,6 +4,137 @@ import { expect, it, vi } from 'vitest'
 import { VideoBackground } from '../src/components/Background/VideoBackground'
 import { defaultWallpaper } from '../src/types/interfaceSettings'
 
+it('pauses a normal window on focus loss without pausing an active attached desktop', async () => {
+  const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false)
+  const container = document.createElement('div'), root = createRoot(container)
+  try {
+    await act(async () => root.render(createElement(VideoBackground, {visual:{kind:'image',src:'/scene.jpg'},ambient:true,isPlaying:true,isMuted:true,volume:0,settings:defaultWallpaper})))
+    const idle = container.querySelector<HTMLElement>('.video-background__idle')!
+    await act(async () => window.dispatchEvent(new Event('blur')))
+    expect(idle.style.animationPlayState).toBe('paused')
+    await act(async () => window.dispatchEvent(new Event('focus')))
+    expect(idle.style.animationPlayState).toBe('running')
+    await act(async () => {document.documentElement.setAttribute('data-wallpaper-input','');window.dispatchEvent(new Event('blur'))})
+    expect(idle.style.animationPlayState).toBe('running')
+  } finally {await act(async()=>root.unmount());hidden.mockRestore();document.documentElement.removeAttribute('data-wallpaper-input')}
+})
+
+it('freezes background video at its current frame, resumes it, and allows opting out', async () => {
+  document.documentElement.setAttribute('data-wallpaper-input', '')
+  const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()
+  const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+  const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
+  const container = document.createElement('div'), root = createRoot(container)
+  const render = (pauseWhenInactive = true) => act(async () => root.render(createElement(VideoBackground, { visual: {kind:'video',src:'/background.mp4'}, ambient:true, isPlaying:true, isMuted:true, volume:0, settings:{...defaultWallpaper,pauseWhenInactive} })))
+  try {
+    await render()
+    const video = container.querySelector('video')!
+    video.currentTime = 12.5
+    const plays = play.mock.calls.length
+    pause.mockClear(); load.mockClear()
+    await act(async () => document.documentElement.setAttribute('data-wallpaper-paused', ''))
+    expect(pause).toHaveBeenCalled()
+    expect(play).toHaveBeenCalledTimes(plays)
+    expect(load).not.toHaveBeenCalled()
+    expect(video.getAttribute('src')).toBe('/background.mp4')
+    expect(video.currentTime).toBe(12.5)
+    expect(container.querySelector<HTMLElement>('.video-background__idle')!.style.animationPlayState).toBe('paused')
+    await act(async () => document.documentElement.removeAttribute('data-wallpaper-paused'))
+    expect(play).toHaveBeenCalledTimes(plays + 1)
+    expect(container.querySelector('video')).toBe(video)
+    expect(video.currentTime).toBe(12.5)
+    await act(async () => document.documentElement.setAttribute('data-wallpaper-paused', ''))
+    await render(false)
+    expect(container.querySelector<HTMLElement>('.video-background__idle')!.style.animationPlayState).toBe('running')
+    expect(container.querySelector('.video-background')!.getAttribute('data-paused')).toBe('false')
+  } finally {
+    await act(async () => root.unmount())
+    document.documentElement.removeAttribute('data-wallpaper-input')
+    document.documentElement.removeAttribute('data-wallpaper-paused')
+    play.mockRestore(); pause.mockRestore(); load.mockRestore()
+  }
+})
+
+it('holds displayed artwork and parallax while another app is active, then shows only the latest track', async () => {
+  vi.useFakeTimers()
+  document.documentElement.setAttribute('data-wallpaper-input', '')
+  const container = document.createElement('div'), root = createRoot(container)
+  const render = (id: string) => act(async () => root.render(createElement(VideoBackground, {visual:{kind:'image',src:`/${id}.jpg`},trackId:id,ambient:true,isPlaying:true,isMuted:true,volume:0,settings:defaultWallpaper})))
+  const point = (x: number) => act(async () => {
+    window.dispatchEvent(new CustomEvent('musicwall:wallpaper-pointer', {detail:{x,y:0,inside:true}}))
+    await vi.advanceTimersByTimeAsync(20)
+  })
+  try {
+    await render('one')
+    await act(async () => {container.querySelector('img[src="/one.jpg"]')!.dispatchEvent(new Event('load'));await vi.advanceTimersByTimeAsync(700)})
+    const first = container.querySelector('img[src="/one.jpg"]')!
+    const scene = container.querySelector<HTMLElement>('.video-background__scene')!
+    await point(0)
+    const position = scene.style.getPropertyValue('--album-x')
+    expect(position).not.toBe('')
+    await act(async () => document.documentElement.setAttribute('data-wallpaper-paused',''))
+    await point(window.innerWidth)
+    expect(scene.style.getPropertyValue('--album-x')).toBe(position)
+    await render('two'); await render('three')
+    expect(container.querySelector('img[src="/one.jpg"]')).toBe(first)
+    expect(container.querySelector('img[src="/two.jpg"]')).toBeNull()
+    expect(container.querySelector('img[src="/three.jpg"]')).toBeNull()
+    await act(async () => document.documentElement.removeAttribute('data-wallpaper-paused'))
+    expect(container.querySelector('img[src="/three.jpg"]')).not.toBeNull()
+    expect(container.querySelector('img[src="/two.jpg"]')).toBeNull()
+    await point(window.innerWidth)
+    expect(scene.style.getPropertyValue('--album-x')).not.toBe(position)
+    await act(async () => {container.querySelector('img[src="/three.jpg"]')!.dispatchEvent(new Event('load'));await vi.advanceTimersByTimeAsync(700)})
+    expect(container.querySelector('img[src="/one.jpg"]')).toBeNull()
+  } finally {
+    await act(async () => root.unmount())
+    document.documentElement.removeAttribute('data-wallpaper-input')
+    document.documentElement.removeAttribute('data-wallpaper-paused')
+    vi.useRealTimers()
+  }
+})
+
+it('reports rejected video playback without leaking media URLs and releases the failed media', async () => {
+  const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockRejectedValue(new DOMException('https://private.test/video?token=private', 'NotAllowedError'))
+  const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+  const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const container = document.createElement('div'), root = createRoot(container)
+  try {
+    await act(async () => root.render(createElement(VideoBackground, { visual: {kind:'video',src:'/video.mp4'}, ambient:true, isPlaying:true, isMuted:true, volume:0, settings:defaultWallpaper })))
+    expect(play).toHaveBeenCalled()
+    expect(warning).toHaveBeenCalledWith('[MusicWall video] Playback rejected:', 'NotAllowedError')
+    expect(JSON.stringify(warning.mock.calls)).not.toContain('private')
+    const video = container.querySelector('video')!
+    await act(async () => root.unmount())
+    expect(video.hasAttribute('src')).toBe(false)
+    expect(load).toHaveBeenCalled()
+  } finally { await act(async () => root.unmount()); play.mockRestore(); pause.mockRestore(); load.mockRestore(); warning.mockRestore() }
+})
+
+it('keeps loaded ambient video playing on a visible attached desktop and releases it on unmount', async () => {
+  vi.useFakeTimers()
+  const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true)
+  const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()
+  const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+  const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
+  const container = document.createElement('div'), root = createRoot(container)
+  try {
+    await act(async () => root.render(createElement(VideoBackground, { visual: {kind:'video',src:'/background.mp4'}, ambient:true, isPlaying:false, isMuted:true, volume:0, settings:defaultWallpaper })))
+    const video = container.querySelector('video')!
+    await act(async () => { video.dispatchEvent(new Event('loadeddata')); await vi.advanceTimersByTimeAsync(700) })
+    expect(play).not.toHaveBeenCalled()
+    await act(async () => document.documentElement.setAttribute('data-wallpaper-input', ''))
+    expect(play).toHaveBeenCalled()
+    expect(video.muted).toBe(true)
+    await act(async () => document.documentElement.removeAttribute('data-wallpaper-input'))
+    expect(pause).toHaveBeenCalled()
+    await act(async () => root.unmount())
+    expect(video.hasAttribute('src')).toBe(false)
+    expect(load).toHaveBeenCalled()
+  } finally { await act(async () => root.unmount()); document.documentElement.removeAttribute('data-wallpaper-input'); hidden.mockRestore(); play.mockRestore(); pause.mockRestore(); load.mockRestore(); vi.useRealTimers() }
+})
+
 it('waits for decoded artwork, ignores stale loads, survives pause, and falls back on image errors', async () => {
   vi.useFakeTimers()
   ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -17,8 +148,18 @@ it('waits for decoded artwork, ignores stale loads, survives pause, and falls ba
     await finish(container.querySelector('img[src="/one.jpg"]')!)
     const first = container.querySelector('img[src="/one.jpg"]')!
     expect((first as HTMLImageElement).style.objectFit).toBe('cover')
+    expect((first as HTMLImageElement).style.objectPosition).toContain('var(--album-x, 50%)')
+    // Breathing belongs to the stable compositor, never a second image animation.
+    expect(first.hasAttribute('data-moving')).toBe(false)
+    const idle = container.querySelector<HTMLElement>('.video-background__idle')!
+    const idleDuration = idle.style.animationDuration
+    expect(idle.dataset.moving).toBe('true')
     await render('one', '/one.jpg', false)
     expect(container.querySelector('img[src="/one.jpg"]')).toBe(first)
+    expect(first.hasAttribute('data-moving')).toBe(false)
+    expect(container.querySelector('.video-background__idle')).toBe(idle)
+    expect(idle.style.animationDuration).toBe(idleDuration)
+    expect(idle.style.animationPlayState).toBe('running')
     await render('two', '/two.jpg')
     const second = container.querySelector<HTMLImageElement>('img[src="/two.jpg"]')!
     let decoded!: () => void
@@ -45,4 +186,18 @@ it('waits for decoded artwork, ignores stale loads, survives pause, and falls ba
     expect(container.querySelectorAll('img[src="/shared.jpg"]')).toHaveLength(2)
     expect(container.querySelectorAll('img[src="/shared.jpg"]')[0]).toBe(shared)
   } finally { await act(async () => root.unmount()); vi.useRealTimers(); container.remove() }
+})
+
+it('pauses an inactive browser scene but keeps attached desktop wallpaper animation running', async () => {
+  const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true)
+  const container = document.createElement('div'), root = createRoot(container)
+  try {
+    await act(async () => root.render(createElement(VideoBackground, {visual:{kind:'image',src:'/scene.jpg'},ambient:true,isPlaying:false,isMuted:true,volume:0,settings:defaultWallpaper})))
+    const idle = container.querySelector<HTMLElement>('.video-background__idle')!
+    expect(idle.style.animationPlayState).toBe('paused')
+    await act(async () => document.documentElement.setAttribute('data-wallpaper-input',''))
+    expect(idle.style.animationPlayState).toBe('running')
+    await act(async () => document.documentElement.removeAttribute('data-wallpaper-input'))
+    expect(idle.style.animationPlayState).toBe('paused')
+  } finally {await act(async () => root.unmount());hidden.mockRestore();document.documentElement.removeAttribute('data-wallpaper-input')}
 })

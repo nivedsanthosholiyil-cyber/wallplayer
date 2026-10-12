@@ -21,7 +21,8 @@ export function normalizeLibraryItem(raw: Raw, type: 'album' | 'artist' | 'playl
 }
 const cache = new Map<string, { value: unknown; at: number }>()
 let rateLimitUntil = 0
-spotifyAuth.subscribe(() => { cache.clear(); rateLimitUntil = 0 })
+let recommendationsAvailable = true
+spotifyAuth.subscribe(() => { cache.clear(); rateLimitUntil = 0; recommendationsAvailable = true })
 async function get<T>(path: string, signal?: AbortSignal): Promise<T | null> {
   if (Date.now() < rateLimitUntil) throw new Error('Spotify is busy. Try again shortly.')
   const stored = cache.get(path)
@@ -37,6 +38,13 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T | null> {
 }
 const validTracks = (raw: Raw[], album?: Raw) => raw.filter(Boolean).map((track) => normalizeLibraryTrack(track, album)).filter((track): track is Track => Boolean(track))
 const validItems = (raw: Raw[], type: 'album' | 'artist' | 'playlist') => raw.filter(Boolean).map((item) => normalizeLibraryItem(item, type)).filter((item): item is MediaItem => Boolean(item))
+function uniqueQueue(seed: Track, candidates: Track[]) {
+  const seen = new Set([seed.id])
+  return [seed, ...candidates.filter(track => {
+    if (!track.id || track.audioSrc || seen.has(track.id)) return false
+    seen.add(track.id); return true
+  })].slice(0, 25)
+}
 export function libraryError(cause: unknown) {
   if (cause instanceof SpotifyApiError && cause.status === 403) return 'Spotify does not allow access to this section. Reconnect for library permissions; some playlists are restricted by Spotify.'
   if (cause instanceof SpotifyApiError && cause.status === 404) return 'No active Spotify device. Start a track in Spotify first.'
@@ -44,6 +52,38 @@ export function libraryError(cause: unknown) {
   return cause instanceof Error ? cause.message : 'The music library is temporarily unavailable.'
 }
 export const spotifyMusicBrowser = {
+  async playSingle(track: Track, fallbackTracks: Track[] = []) {
+    let related: Track[] = []
+    try {
+      if (recommendationsAvailable) {
+        try {
+          const data = await get<{ tracks?: Raw[] }>(`/recommendations?${new URLSearchParams({ seed_tracks: track.id, limit: '20' })}`)
+          related = validTracks(data?.tracks || []).filter(item => item.id !== track.id)
+        } catch (cause) {
+          if (cause instanceof SpotifyApiError && [403, 404].includes(cause.status)) recommendationsAvailable = false
+          else throw cause
+        }
+      }
+      // Recommendations are unavailable to many Spotify apps. Use supported,
+      // artist-filtered search instead of assuming Spotify will autoplay a lone URI.
+      const artist = track.artists?.[0]?.name || track.artist
+      if (!related.length && artist && artist !== 'Unknown artist') {
+        for (const offset of [0, 8, 16]) {
+          const data = await get<{ tracks?: Page<Raw> }>(`/search?${new URLSearchParams({ q: `artist:"${artist.replace(/["\\]/g, '')}"`, type: 'track', limit: '8', offset: String(offset) })}`)
+          related.push(...validTracks(data?.tracks?.items || []))
+          if (!data?.tracks?.next) break
+        }
+      }
+    } catch (cause) {
+      // A continuation lookup must not prevent the requested song from playing.
+      // Surface the short queue to the caller; never log URLs or credentials.
+      console.warn('[Spotify] Continuation unavailable:', cause instanceof SpotifyApiError ? cause.status : 'network or service error')
+    }
+    const relatedQueue = uniqueQueue(track, related)
+    const queue = relatedQueue.length > 1 ? relatedQueue : uniqueQueue(track, fallbackTracks)
+    await spotifyMusicBrowser.play(queue)
+    return queue.length - 1
+  },
   async search(query: string, offset = 0, signal?: AbortSignal): Promise<MusicSearchResults & { hasNext: boolean }> {
     const data = await get<{ tracks?: Page<Raw>; artists?: Page<Raw>; albums?: Page<Raw>; playlists?: Page<Raw> }>(`/search?${new URLSearchParams({ q: query, type: 'track,artist,album,playlist', limit: '8', offset: String(offset) })}`, signal)
     return { songs: validTracks(data?.tracks?.items || []), artists: validItems(data?.artists?.items || [], 'artist'), albums: validItems(data?.albums?.items || [], 'album'), playlists: validItems(data?.playlists?.items || [], 'playlist'), hasNext: Object.values(data || {}).some((page) => Boolean(page?.next)) }

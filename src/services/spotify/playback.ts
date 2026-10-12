@@ -69,10 +69,20 @@ export interface SpotifyPlaybackResult {
 
 export const spotifyPlayback = {
   async getCurrent(signal?: AbortSignal): Promise<SpotifyPlaybackResult> {
-    const raw = await spotifyClient.request<SpotifyRawPlayback>('/me/player', { signal })
+    let latency = 0, sampledAt = performance.now()
+    const raw = await spotifyClient.request<SpotifyRawPlayback>('/me/player', { signal, onTiming: (sent, received) => {
+      // Approximate the return journey, excluding token refresh. Spotify's timestamp
+      // describes the last state change, not when progress_ms was sampled.
+      latency = Math.max(0, received - sent) / 2000
+      sampledAt = received
+    } })
     if (!raw) return { playback: null, reason: 'no-device' }
     if (!raw.item) return { playback: null, reason: raw.device ? 'no-track' : 'no-device' }
     const playback = normalizePlayback(raw)
+    if (playback) {
+      playback.sampledAt = sampledAt
+      if (playback.isPlaying && raw.progress_ms !== null) playback.position = Math.min(playback.duration, playback.position + latency)
+    }
     return playback ? { playback, reason: 'track' } : { playback: null, reason: 'unsupported' }
   },
   play: () => spotifyClient.command('/me/player/play', 'PUT'),

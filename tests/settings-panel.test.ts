@@ -1,6 +1,6 @@
 import { act, createElement, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SettingsPanel } from '../src/components/Settings/SettingsPanel'
 import { AppShell } from '../src/components/Player/AppShell'
 import { useInterfaceSettings } from '../src/hooks/useInterfaceSettings'
@@ -11,7 +11,9 @@ import { restoreInterfaceSettings, restoreLyricPreferences } from '../src/data/s
 
 vi.mock('../src/services/wallpaperAsset', () => ({ wallpaperAsset: { get: vi.fn(async () => undefined), save: vi.fn(async () => {}), remove: vi.fn(async () => {}) } }))
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-beforeEach(() => { localStorage.clear(); Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: vi.fn() }) })
+beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); Object.defineProperty(HTMLElement.prototype, 'scrollTo', { configurable: true, value: vi.fn() }) })
+
+afterEach(() => { vi.clearAllTimers(); vi.useRealTimers() })
 
 it('keeps categories, previews, focus and persisted settings independent', async () => {
   localStorage.setItem('musicwall.interface.settings.v1', JSON.stringify({ appearance: { ...defaultAppearance, transitionStyle: 'instant', motionEnabled: false }, wallpaper: { ...defaultWallpaper, source: 'static', brightness: 84 } }))
@@ -32,7 +34,9 @@ it('keeps categories, previews, focus and persisted settings independent', async
   const click = async (label: string) => {
     const button = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === label || node.getAttribute('aria-label') === label)!
     expect(button).toBeTruthy()
-    await act(async () => { button.click(); await new Promise((resolve) => setTimeout(resolve, 30)) })
+    await act(async () => { button.click() })
+    // Commit the state update, then drive the zero-duration transition's RAFs.
+    await act(async () => { await vi.advanceTimersByTimeAsync(32) })
   }
   const select = async (label: string, value: string) => {
     const input = container.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!
@@ -74,7 +78,8 @@ it('keeps categories, previews, focus and persisted settings independent', async
       expect(JSON.parse(localStorage.getItem('musicwall.interface.settings.v1')!).wallpaper.brightness).toBe(84)
     }
     const tab = container.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')!
-    await act(async () => { tab.focus(); tab.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); await new Promise((resolve) => setTimeout(resolve, 30)) })
+    await act(async () => { tab.focus(); tab.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(32) })
     expect(document.activeElement?.textContent).toBe('Wallpaper')
     const image = container.querySelector<HTMLImageElement>('.settings-wallpaper-preview img')!
     expect(image.style.filter).toContain('brightness(84%)')

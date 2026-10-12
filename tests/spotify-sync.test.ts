@@ -1,5 +1,12 @@
 import { act, createElement } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot as reactCreateRoot, type Root } from 'react-dom/client'
+import App from '../src/App'
+import { playerStore } from '../src/store/playerStore'
+import { useSpotify } from '../src/hooks/useSpotify'
+import { useTrackLyrics } from '../src/hooks/useTrackLyrics'
+import { lyricWindow } from '../src/hooks/useLyrics'
+import { spotifyPlayback, toMusicWallTrack } from '../src/services/spotify/playback'
+import { SpotifyApiError } from '../src/services/spotify/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -37,9 +44,22 @@ vi.mock('../src/services/spotify/playback', () => ({
   }),
 }))
 
+// Load the application before the timed tests and before fake timers are installed.
+// Every root is registered so an assertion failure cannot leak a poller/act scope.
+const mounted = new Map<Root, Element>()
+function createRoot(container: Element) {
+  const root = reactCreateRoot(container)
+  const unmount = root.unmount.bind(root)
+  root.unmount = () => { unmount(); mounted.delete(root); container.remove() }
+  mounted.set(root, container)
+  return root
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
-  mocks.pause.mockClear()
+  mocks.pause.mockReset().mockResolvedValue(undefined)
+  mocks.getLyrics.mockReset().mockResolvedValue(null)
+  playerStore.useMock()
   mocks.getCurrent.mockReset().mockResolvedValue({ playback: {
     trackId: 'track-one', title: 'Track One', artists: [], album: 'Album', artwork: null,
     duration: 180, position: 12, isPlaying: true, deviceAvailable: true, deviceId: 'device-one',
@@ -49,8 +69,6 @@ beforeEach(() => {
 })
 
 it('renders normalized Spotify timing in the existing player without inventing lyrics', async () => {
-  const { default: App } = await import('../src/App')
-  const { playerStore } = await import('../src/store/playerStore')
   playerStore.useMock()
   const container = document.createElement('div')
   document.body.append(container)
@@ -70,8 +88,6 @@ it('renders normalized Spotify timing in the existing player without inventing l
 
 it('restores play state when Spotify rejects a playback command', async () => {
   mocks.pause.mockRejectedValueOnce(new Error('Command failed'))
-  const { default: App } = await import('../src/App')
-  const { playerStore } = await import('../src/store/playerStore')
   playerStore.useMock()
   const container = document.createElement('div')
   document.body.append(container)
@@ -86,14 +102,16 @@ it('restores play state when Spotify rejects a playback command', async () => {
   container.remove()
 })
 
-afterEach(() => {
-  vi.useRealTimers()
+afterEach(async () => {
+  try {
+    await act(async () => { for (const root of [...mounted.keys()]) root.unmount() })
+  } finally {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  }
 })
 
 it.each(['seek', 'volume'] as const)('does not apply a late Spotify %s result to local playback', async (action) => {
-  const { useSpotify } = await import('../src/hooks/useSpotify')
-  const { spotifyPlayback, toMusicWallTrack } = await import('../src/services/spotify/playback')
-  const { playerStore } = await import('../src/store/playerStore')
   playerStore.useMock()
   let finish!: () => void
   vi.mocked(action === 'seek' ? spotifyPlayback.seek : spotifyPlayback.setVolume).mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
@@ -116,8 +134,6 @@ it.each(['seek', 'volume'] as const)('does not apply a late Spotify %s result to
 })
 
 it('polls Spotify while mounted, updates the player store, and stops after unmount', async () => {
-  const { useSpotify } = await import('../src/hooks/useSpotify')
-  const { playerStore } = await import('../src/store/playerStore')
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
@@ -146,8 +162,6 @@ it('ignores an older playback response after a refresh starts', async () => {
       duration: 90, position: 20, isPlaying: false, deviceAvailable: true, deviceId: null,
       deviceRestricted: false, supportsVolume: true, volume: 0.5,
     }, reason: 'track' })
-  const { useSpotify } = await import('../src/hooks/useSpotify')
-  const { playerStore } = await import('../src/store/playerStore')
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
@@ -168,10 +182,24 @@ it('ignores an older playback response after a refresh starts', async () => {
   container.remove()
 })
 
+it('keeps Spotify reconciliation alive for desktop wallpaper even when Chromium reports hidden', async () => {
+  const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true)
+  const container = document.createElement('div'), root = createRoot(container)
+  function Probe() { useSpotify(); return null }
+  try {
+    await act(async () => { root.render(createElement(Probe)); await vi.advanceTimersByTimeAsync(0) })
+    expect(mocks.getCurrent).not.toHaveBeenCalled()
+    await act(async () => { document.documentElement.setAttribute('data-wallpaper-input','') })
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
+    expect(mocks.getCurrent).toHaveBeenCalledTimes(2)
+    await act(async () => { document.documentElement.removeAttribute('data-wallpaper-input') })
+    await act(async () => { await vi.advanceTimersByTimeAsync(15000) })
+    expect(mocks.getCurrent).toHaveBeenCalledTimes(2)
+  } finally { await act(async () => root.unmount()); hidden.mockRestore(); document.documentElement.removeAttribute('data-wallpaper-input') }
+})
+
 it('keeps the retry window after Spotify rate limits polling', async () => {
-  const { SpotifyApiError } = await import('../src/services/spotify/client')
   mocks.getCurrent.mockRejectedValueOnce(new SpotifyApiError(429, 'Too many requests', 12))
-  const { useSpotify } = await import('../src/hooks/useSpotify')
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
@@ -190,8 +218,6 @@ it('keeps the retry window after Spotify rate limits polling', async () => {
 
 it('loads lyrics once per track and follows Spotify seeking without refetching', async () => {
   mocks.getLyrics.mockResolvedValueOnce({ synced: true, lines: [{ startMs: 0, endMs: 15000, text: 'First lyric' }, { startMs: 15000, endMs: 180000, text: 'Second lyric' }] })
-  const { default: App } = await import('../src/App')
-  const { playerStore } = await import('../src/store/playerStore')
   playerStore.useMock()
   const callsBefore = mocks.getLyrics.mock.calls.length
   const container = document.createElement('div')
@@ -202,7 +228,6 @@ it('loads lyrics once per track and follows Spotify seeking without refetching',
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     expect(container.querySelector('.lyrics__current')?.textContent).toBe('First lyric')
     await act(async () => { playerStore.seek(20); await vi.advanceTimersByTimeAsync(1200) })
-    const { lyricWindow } = await import('../src/hooks/useLyrics')
     const snapshot = playerStore.getSnapshot()
     expect(lyricWindow(snapshot.spotifyTrack!.lyrics, snapshot.currentTime).current?.text).toBe('Second lyric')
     expect(mocks.getLyrics.mock.calls.length - callsBefore).toBe(1)
@@ -216,9 +241,6 @@ it('loads lyrics once per track and follows Spotify seeking without refetching',
 it('aborts old lyrics lookup and never applies its late result to a new track', async () => {
   let resolveOld!: (result: unknown) => void
   mocks.getLyrics.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve })).mockResolvedValueOnce({ synced: true, lines: [{ startMs: 0, endMs: 90000, text: 'New track lyric' }] })
-  const { useTrackLyrics } = await import('../src/hooks/useTrackLyrics')
-  const { playerStore } = await import('../src/store/playerStore')
-  const { toMusicWallTrack } = await import('../src/services/spotify/playback')
   const playback = (await mocks.getCurrent()).playback
   playerStore.useSpotify()
   playerStore.applySpotifyPlayback(playback, toMusicWallTrack(playback))

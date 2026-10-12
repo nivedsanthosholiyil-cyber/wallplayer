@@ -122,8 +122,16 @@ it('requests graceful shutdown and kills an unresponsive server after the deadli
   child.emit('exit', 0)
   await stop
   expect(child.kill).not.toHaveBeenCalled()
-  await lifecycle.stopServer(child, 5)
-  expect(child.kill).toHaveBeenCalledOnce()
+  expect(lifecycle.stopServer(child)).toBe(stop)
+  const stuck = Object.assign(new EventEmitter(), { pid: 43, kill: vi.fn(), postMessage: vi.fn() })
+  vi.useFakeTimers()
+  let settled = false
+  const stopping = lifecycle.stopServer(stuck, 5); stopping.then(() => { settled = true })
+  await vi.advanceTimersByTimeAsync(5)
+  expect(stuck.kill).toHaveBeenCalledOnce(); expect(settled).toBe(false)
+  stuck.emit('exit', 1)
+  await expect(stopping).resolves.toEqual({ exited: true, forced: true })
+  expect(stuck.listenerCount('exit')).toBe(0)
 })
 it('loads optional environment files without Vite and lets process configuration win', async () => {
   await start()
@@ -141,4 +149,13 @@ it('bounds proxy parameters, keeps keys server-side and disallows upstream redir
   expect(options).toMatchObject({ headers: { Authorization: 'Bearer private-key' }, redirect: 'error' })
   expect(response.end.mock.calls[0][0].toString()).not.toContain('private-key')
   expect(() => createLyricsHandler({ apiUrl: 'http://provider.example' })).toThrow('HTTPS')
+})
+
+it('reports unconfirmed server termination instead of logging successful cleanup', async () => {
+  vi.useFakeTimers()
+  const child = Object.assign(new EventEmitter(), { pid: 42, kill: vi.fn(), postMessage: vi.fn(() => { throw new Error('IPC closed') }) })
+  const stopping = lifecycle.stopServer(child)
+  await vi.advanceTimersByTimeAsync(1000)
+  await expect(stopping).resolves.toEqual({ exited: false, forced: true })
+  expect(child.listenerCount('exit')).toBe(0)
 })

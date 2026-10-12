@@ -35,16 +35,22 @@ export function usePlayerControls(onTogglePlay: () => void, settingsOpen: boolea
     function onPointerDown(event: PointerEvent) {
       if (event.clientY >= window.innerHeight - Math.min(220, window.innerHeight * 0.3)) revealControls()
     }
+    function onWallpaperPointer(event: Event) {
+      const point = (event as CustomEvent<{ x: number; y: number; inside: boolean }>).detail
+      if (point.inside && point.y >= window.innerHeight - Math.min(220, window.innerHeight * 0.3)) revealControls()
+    }
     function onFocus(event: FocusEvent) {
       if ((event.target as HTMLElement).closest('.player-controls')) revealControls()
     }
     window.addEventListener('pointermove', onPointerMove, { passive: true })
     window.addEventListener('pointerdown', onPointerDown, { passive: true })
+    window.addEventListener('musicwall:wallpaper-pointer', onWallpaperPointer)
     window.addEventListener('focusin', onFocus)
     window.addEventListener('keydown', onKeyDown)
     return () => {
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('musicwall:wallpaper-pointer', onWallpaperPointer)
       window.removeEventListener('focusin', onFocus)
       window.removeEventListener('keydown', onKeyDown)
     }

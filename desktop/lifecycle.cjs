@@ -17,13 +17,25 @@ function waitForReady(child, origin, timeoutMs = 15000) {
     child.once('exit', exit)
   })
 }
+const shutdowns = new WeakMap()
 function stopServer(child, timeoutMs = 3500) {
-  if (!child?.pid) return Promise.resolve()
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => { child.kill(); finish() }, timeoutMs)
-    const finish = () => { clearTimeout(timer); child.off('exit', finish); resolve() }
-    child.once('exit', finish)
-    try { child.postMessage({ type: 'shutdown' }) } catch { child.kill(); finish() }
+  if (!child?.pid) return Promise.resolve({ exited: true, forced: false })
+  if (shutdowns.has(child)) return shutdowns.get(child)
+  const result = new Promise((resolve) => {
+    let forced = false, exited = false, timer
+    const finish = () => { clearTimeout(timer); child.off('exit', onExit); resolve({ exited, forced }) }
+    const onExit = () => { exited = true; finish() }
+    const force = () => {
+      forced = true
+      // A successful kill() is a request, not proof the process/port has gone away.
+      timer = setTimeout(finish, 1000)
+      try { child.kill() } catch { finish() }
+    }
+    child.once('exit', onExit)
+    timer = setTimeout(force, timeoutMs)
+    try { child.postMessage({ type: 'shutdown' }) } catch { clearTimeout(timer); force() }
   })
+  shutdowns.set(child, result)
+  return result
 }
 module.exports = { waitForReady, stopServer }

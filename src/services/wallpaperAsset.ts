@@ -14,12 +14,13 @@ function openDatabase(): Promise<IDBDatabase> {
 async function transaction<T>(mode: IDBTransactionMode, operation: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   const database = await openDatabase()
   return new Promise((resolve, reject) => {
-    const tx = database.transaction(STORE, mode)
-    const request = operation(tx.objectStore(STORE))
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
-    tx.oncomplete = () => database.close()
-    tx.onerror = () => { database.close(); reject(tx.error) }
+    try {
+      const tx = database.transaction(STORE, mode)
+      const request = operation(tx.objectStore(STORE))
+      tx.oncomplete = () => { database.close(); resolve(request.result) }
+      tx.onabort = () => { database.close(); reject(tx.error ?? request.error ?? new Error('Wallpaper transaction aborted')) }
+      tx.onerror = () => { database.close(); reject(tx.error ?? request.error) }
+    } catch (error) { database.close(); reject(error) }
   })
 }
 

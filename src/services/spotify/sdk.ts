@@ -42,6 +42,7 @@ export function normalizeSdkState(state: SdkState, deviceId: string): Normalized
     artists: track.artists.map((artist) => ({ id: artist.uri?.split(':').at(-1) ?? null, name: artist.name })),
     album: track.album.name, artwork: track.album.images[0]?.url ?? null,
     duration: state.duration / 1000, position: state.position / 1000, isPlaying: !state.paused,
+    sampledAt: performance.now(),
     deviceAvailable: true, deviceId, deviceRestricted: false, supportsVolume: true, volume: null,
   }
 }
@@ -53,7 +54,7 @@ export function startSpotifySdk(onState: (state: NormalizedPlayback | null) => v
   let deviceId = ''
   void loadSdk().then(async () => {
     if (disposed) return
-    player = new (window as SdkWindow).Spotify!.Player({ name: 'MusicWall', volume: 0.7,
+    player = new (window as SdkWindow).Spotify!.Player({ name: 'Spontaneous', volume: 0.7,
       getOAuthToken: (callback) => { void spotifyAuth.getAccessToken().then((token) => { if (!disposed) callback(token) }).catch(onError) },
     })
     player.addListener('ready', (data: { device_id: string }) => {
