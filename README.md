@@ -2,6 +2,16 @@
 
 A cinematic, single-screen music player built with React, Vite, Tailwind CSS, TypeScript, Framer Motion, and Lucide React. It starts with a local mock playlist and can connect to Spotify for current playback state and remote controls.
 
+## Windows download
+
+**[Download Spontaneous Setup for Windows x64](https://github.com/nivedsanthosholiyil-cyber/wallplayer/releases/download/v0.1.1-preview.2/Spontaneous-Setup-0.1.1-x64.exe)**
+
+Download the single `.exe` and run setup. The installer offers **Open Spontaneous when Windows starts**. No separate Node.js installation is needed.
+
+[Latest preview release and verification notes](https://github.com/nivedsanthosholiyil-cyber/wallplayer/releases/tag/v0.1.1-preview.2). Preview 2 adds background pause while using another app (music continues), wallpaper recovery fixes, and uploaded-wallpaper persistence fixes. This is an unsigned experimental Windows preview; see the release notes for checks that still need manual testing.
+
+The updated Windows desktop source is on [feature/windows-live-wallpaper](https://github.com/nivedsanthosholiyil-cyber/wallplayer/tree/feature/windows-live-wallpaper). The main branch below retains the earlier browser implementation.
+
 ## Run locally
 
 ```bash
