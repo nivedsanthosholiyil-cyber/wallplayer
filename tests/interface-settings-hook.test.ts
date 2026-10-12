@@ -2,9 +2,30 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
 import { useInterfaceSettings } from '../src/hooks/useInterfaceSettings'
+import { wallpaperAsset } from '../src/services/wallpaperAsset'
 
 vi.mock('../src/services/wallpaperAsset', () => ({ wallpaperAsset: { get: vi.fn(async () => undefined), save: vi.fn(async () => {}), remove: vi.fn(async () => {}) } }))
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+it('keeps a newly uploaded wallpaper when an older startup read finishes later', async () => {
+  let finishRead!: (blob: Blob) => void
+  vi.mocked(wallpaperAsset.get).mockReturnValueOnce(new Promise((resolve) => { finishRead = resolve }))
+  const create = vi.fn().mockReturnValueOnce('blob:new-upload').mockReturnValueOnce('blob:old-saved')
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: create })
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+  let settings!: ReturnType<typeof useInterfaceSettings>
+  function Probe() { settings = useInterfaceSettings(); return null }
+  const container = document.createElement('div'); document.body.append(container)
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(createElement(Probe)))
+    await act(async () => settings.uploadWallpaper(new File(['new'], 'new.png', { type: 'image/png' })))
+    await act(async () => finishRead(new Blob(['old'], { type: 'image/png' })))
+    expect(settings.customWallpaper?.url).toBe('blob:new-upload')
+    expect(settings.customWallpaper?.name).toBe('new.png')
+    expect(create).toHaveBeenCalledOnce()
+  } finally { await act(async () => root.unmount()); container.remove() }
+})
 
 it('releases uploaded wallpaper URLs on replacement and unmount', async () => {
   const create = vi.fn().mockReturnValueOnce('blob:first-upload').mockReturnValueOnce('blob:second-upload')

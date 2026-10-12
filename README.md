@@ -4,7 +4,9 @@ A cinematic, single-screen music player built with React, Vite, Tailwind CSS, Ty
 
 ## Windows download
 
-[Download Spontaneous Setup for Windows x64](https://github.com/nivedsanthosholiyil-cyber/wallplayer/releases/download/v0.1.1-preview.1/Spontaneous-Setup-0.1.1-x64.exe). This is a preview build; see the [release notes](https://github.com/nivedsanthosholiyil-cyber/wallplayer/releases/tag/v0.1.1-preview.1) and [verification report](docs/windows-runtime-acceptance.md).
+[Download Spontaneous Setup for Windows x64](https://github.com/nivedsanthosholiyil-cyber/wallplayer/releases/download/v0.1.1-preview.2/Spontaneous-Setup-0.1.1-x64.exe). This is a preview build; see the [release notes](https://github.com/nivedsanthosholiyil-cyber/wallplayer/releases/tag/v0.1.1-preview.2) and [verification report](docs/release-0.1.1-preview.2.md).
+
+Preview 2 adds **Settings → Wallpaper → Pause background while using other apps**: video, breathing and parallax freeze while another app is active, then resume on return. Music keeps playing. It also fixes blocking wallpaper-error recovery and races when saving or restoring uploaded wallpapers. The application version remains 0.1.1; this new release tag distinguishes the updated installer. The previous download remains available.
 
 Version 0.1.1 fixes restoration of saved Spotify connections and native wallpaper-window styles. Wallpaper motion now offers Off, Parallax only, Breathing only and Parallax + breathing. The gentle centered breathing replaces automatic directional drifting and respects global Motion and reduced-motion preferences.
 

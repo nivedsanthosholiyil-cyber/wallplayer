@@ -31,6 +31,8 @@ public sealed class MusicWallWallpaper {
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll")] static extern bool GetWindowPlacement(IntPtr hwnd, ref Placement placement);
     [DllImport("user32.dll")] static extern IntPtr GetParent(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
     [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hwnd, uint command);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
     [DllImport("user32.dll", SetLastError=true)] static extern IntPtr SetParent(IntPtr hwnd, IntPtr parent);
@@ -69,6 +71,17 @@ public sealed class MusicWallWallpaper {
         CaptureNormalBounds();
     }
     static string Class(IntPtr w) { var s = new StringBuilder(256); GetClassName(w, s, s.Capacity); return s.ToString(); }
+    public bool DesktopIsActive() {
+        // Read only the window the user is using, not the list of running apps.
+        // No hooks, titles, process names, input interception or focus changes.
+        IntPtr foreground=GetForegroundWindow();
+        if (foreground==IntPtr.Zero) return false;
+        if (foreground==hwnd || foreground==inputWindow) return true;
+        IntPtr root=GetAncestor(foreground,2);
+        if (root==hwnd || root==inputWindow) return true;
+        string cls=Class(root==IntPtr.Zero ? foreground : root);
+        return cls=="Progman" || cls=="WorkerW" || cls=="Shell_TrayWnd" || cls=="Shell_SecondaryTrayWnd";
+    }
     static void ProbeWindow(List<WindowInfo> list, IntPtr w, bool children) {
         uint pid; GetWindowThreadProcessId(w,out pid);
         list.Add(new WindowInfo { Handle=w.ToInt64(), Parent=GetParent(w).ToInt64(), Class=Class(w), ProcessId=pid,
@@ -163,8 +176,23 @@ public sealed class MusicWallWallpaper {
         IntPtr after=GetWindow(desktop,3);
         if (after==inputWindow) after=GetWindow(inputWindow,3);
         if (after!=IntPtr.Zero && (GetLong(after,-20).ToInt64() & 0x8L)!=0) after=new IntPtr(-2);
-        if (!SetWindowPos(inputWindow,after,x,y,width,height,0x10|0x20))
-            throw new Win32Exception(Marshal.GetLastWin32Error(),"Could not place the input surface.");
+        // Do not reorder Explorer (the owner) when positioning our popup.
+        const uint flags=0x10|0x20|0x200;
+        if (!SetWindowPos(inputWindow,after,x,y,width,height,flags)) {
+            int error=Marshal.GetLastWin32Error();
+            // A sibling can close between reading z-order and applying it. Only
+            // retry that identifiable race; never mask a destroyed input/host HWND.
+            if (error==1400 && after.ToInt64()>0 && !IsWindow(after) && IsWindow(inputWindow) && IsWindow(desktop)) {
+                after=GetWindow(desktop,3);
+                if (after==inputWindow) after=GetWindow(inputWindow,3);
+                if (after!=IntPtr.Zero && (GetLong(after,-20).ToInt64() & 0x8L)!=0) after=new IntPtr(-2);
+                if (SetWindowPos(inputWindow,after,x,y,width,height,flags)) return;
+                error=Marshal.GetLastWin32Error();
+            }
+            throw new Win32Exception(error,"Could not place the input surface (error " + error +
+                ", input " + inputWindow.ToInt64() + ", after " + after.ToInt64() +
+                ", desktop " + desktop.ToInt64() + ", bounds " + x + "," + y + "," + width + "," + height + ").");
+        }
     }
     void CaptureNormalBounds() {
         if (IsIconic(hwnd)) {

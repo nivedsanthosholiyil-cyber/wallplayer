@@ -6,6 +6,7 @@ class WallpaperInput {
   constructor({ target, BrowserWindow, ipcMain, isAppUrl, screen }) {
     this.target = target; this.ipcMain = ipcMain; this.active = false; this.rects = []; this.routedEvents = 0; this.routedKeys = 0; this.pointerSamples = 0
     this.screen = screen
+    this.desktopActive = true
     this.surface = new BrowserWindow({ title: 'MusicWall controls', width: 1, height: 1,
       frame: false, transparent: true, backgroundColor: '#00000000', show: false,
       skipTaskbar: true, hasShadow: false, resizable: false,
@@ -78,23 +79,36 @@ class WallpaperInput {
     this.ready = this.surface.loadFile(join(__dirname, 'wallpaper-input.html'))
   }
   get handle() { const h = this.surface.getNativeWindowHandle(); return (h.length === 8 ? h.readBigUInt64LE() : BigInt(h.readUInt32LE())).toString(16) }
-  get status() { return { active: this.active, regionCount: this.rects.length, routedEvents: this.routedEvents, routedKeys: this.routedKeys, pointerSamples: this.pointerSamples } }
+  get status() { return { active: this.active, desktopActive: this.desktopActive, regionCount: this.rects.length, routedEvents: this.routedEvents, routedKeys: this.routedKeys, pointerSamples: this.pointerSamples } }
   setActive(active) {
     this.active = active; this.dragging = false
     this.controlHovered = false
     clearInterval(this.pointerTimer); this.lastPointer = null
     this.target.webContents.send('musicwall:wallpaper-input', active)
+    this.target.webContents.send('musicwall:wallpaper-activity', this.desktopActive)
     // Passive cursor samples restore parallax/idle UI under Explorer's icon layer.
     // No global hooks, extra hit regions, focus stealing, clicks or coordinate logs.
-    if (active && this.screen) {
+    if (active && this.desktopActive && this.screen) {
       this.pollPointer()
       this.pointerTimer = setInterval(() => this.pollPointer(), 50)
       this.pointerTimer.unref?.()
     }
     this.refresh()
   }
+  setDesktopActive(active) {
+    if (typeof active !== 'boolean' || active === this.desktopActive || this.target.isDestroyed()) return
+    this.desktopActive = active
+    // Only the background is suspended. Player input and audio remain live.
+    this.target.webContents.send('musicwall:wallpaper-activity', active)
+    clearInterval(this.pointerTimer); this.lastPointer = null
+    if (this.active && active && this.screen) {
+      this.pollPointer()
+      this.pointerTimer = setInterval(() => this.pollPointer(), 50)
+      this.pointerTimer.unref?.()
+    }
+  }
   pollPointer() {
-    if (!this.active || this.target.isDestroyed() || this.dragging) return
+    if (!this.active || !this.desktopActive || this.target.isDestroyed() || this.dragging) return
     const cursor = this.screen.getCursorScreenPoint(), bounds = this.target.getContentBounds()
     const x = Math.round(cursor.x - bounds.x), y = Math.round(cursor.y - bounds.y)
     const geometry = `${bounds.x}:${bounds.y}:${bounds.width}:${bounds.height}`

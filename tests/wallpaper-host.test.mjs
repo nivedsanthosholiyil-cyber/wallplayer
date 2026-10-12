@@ -28,6 +28,27 @@ afterEach(async () => {
   }
 })
 const attached = { type: 'ready', mode: 'wallpaper', details: { Verified: true, Parent: 101, Child: true } }
+it('reports foreground activity changes independently of attachment and mode', async () => {
+  const { host, send } = await fixture()
+  const activity = vi.fn(); host.on('activity', activity)
+  const ready = host.start(); send(attached); await ready
+  send({ type: 'activity', active: false })
+  send({ type: 'activity', active: false })
+  send({ type: 'activity', active: true })
+  expect(activity.mock.calls).toEqual([[false], [true]])
+  expect(host.mode).toBe('wallpaper')
+  expect(host.details.Parent).toBe(101)
+  expect(() => host.receive({ type: 'activity', active: 'false' })).toThrow('Invalid desktop activity')
+  await host.stop(1)
+  host.receive({ type: 'activity', active: false })
+  expect(activity).toHaveBeenCalledTimes(2)
+})
+it.runIf(process.platform === 'win32')('positions the real native input popup repeatedly without changing its owner', async () => {
+  const { stdout } = await promisify(execFile)('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File',
+    resolve('tests/fixtures/native-input-placement.ps1'), '-Source', resolve('desktop/wallpaper-native.cs')],
+  { windowsHide: true, timeout: 15000 })
+  expect(JSON.parse(stdout.trim())).toEqual({ cycles: 30, ownerRetained: true, width: 640, height: 480 })
+}, 20000)
 it('waits for native verification before accepting attachment and uses a fixed trusted helper', async () => {
   const { host, spawnImpl, send } = await fixture()
   const ready = host.start(); let settled = false; ready.then(() => { settled = true })

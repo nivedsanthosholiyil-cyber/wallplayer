@@ -7,7 +7,8 @@ contextBridge.exposeInMainWorld('musicwallSpotifySession', {
 })
 // Report the existing UI's visible hit areas.
 window.addEventListener('DOMContentLoaded', () => {
-  let active = false, previous = '', timer, lastPointer = null
+  let active = false, desktopActive = true, previous = '', timer, lastPointer = null
+  const reportActivity = () => document.documentElement.toggleAttribute('data-wallpaper-paused', active && !desktopActive)
   const replayPointer = () => {
     if (active && lastPointer) window.dispatchEvent(new window.CustomEvent('musicwall:wallpaper-pointer', { detail: { ...lastPointer } }))
   }
@@ -53,8 +54,13 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!active) lastPointer = null
     // Keep the existing player's controls reachable over an otherwise passive desktop.
     document.documentElement.toggleAttribute('data-wallpaper-input', active)
+    reportActivity()
     if (!active) { for (const [el, title] of titles) if (el.isConnected && !el.hasAttribute('title')) el.setAttribute('title', title); titles.clear() }
     if (active) { clearDisplaySelection(); report(); timer = setInterval(report, 150) }
+  })
+  ipcRenderer.on('musicwall:wallpaper-activity', (_event, value) => {
+    if (typeof value !== 'boolean') return
+    desktopActive = value; reportActivity()
   })
   ipcRenderer.on('musicwall:wallpaper-pointer', (_event, point) => {
     if (!active || !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return

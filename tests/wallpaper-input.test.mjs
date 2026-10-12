@@ -1,8 +1,59 @@
 // @vitest-environment node
 import { EventEmitter } from 'node:events'
 import { createRequire } from 'node:module'
+import { readFileSync } from 'node:fs'
+import { runInNewContext } from 'node:vm'
 import { expect, it, vi } from 'vitest'
 const { WallpaperInput } = createRequire(import.meta.url)('../desktop/wallpaper-input.cjs')
+it('suspends passive pointer sampling while another app is active without disabling player input', () => {
+  vi.useFakeTimers()
+  const screen = { getCursorScreenPoint: vi.fn(() => ({ x: 100, y: 200 })) }, f = fixture(screen)
+  try {
+    f.bridge.setActive(true)
+    f.bridge.setDesktopActive(false)
+    expect(f.bridge.active).toBe(true)
+    expect(f.bridge.status.desktopActive).toBe(false)
+    expect(f.target.webContents.send).toHaveBeenLastCalledWith('musicwall:wallpaper-activity', false)
+    const count = screen.getCursorScreenPoint.mock.calls.length
+    vi.advanceTimersByTime(1000)
+    expect(screen.getCursorScreenPoint).toHaveBeenCalledTimes(count)
+    f.ipcMain.emit('musicwall:control-input', f.event(f.bridge.surface), { type: 'mouseDown', x: 910, y: 810, button: 'left' })
+    expect(f.target.webContents.sendInputEvent).toHaveBeenCalled()
+    f.target.webContents.emit('did-finish-load')
+    expect(f.target.webContents.send).toHaveBeenCalledWith('musicwall:wallpaper-activity', false)
+    expect(vi.getTimerCount()).toBe(0)
+    f.bridge.setDesktopActive(true)
+    expect(screen.getCursorScreenPoint).toHaveBeenCalledTimes(count + 1)
+    expect(vi.getTimerCount()).toBe(1)
+    f.bridge.setDesktopActive(true)
+    expect(vi.getTimerCount()).toBe(1)
+  } finally { f.bridge.destroy(); vi.useRealTimers() }
+})
+it('releases a routed click when a file dialog cancels capture, then accepts Settings clicks normally', () => {
+  const f = fixture(); f.bridge.setActive(true)
+  const listeners = new Map()
+  const document = { addEventListener: (name, fn) => listeners.set(name, fn) }
+  const ipcRenderer = { send: (_channel, packet) => f.ipcMain.emit('musicwall:control-input', f.event(f.bridge.surface), packet) }
+  runInNewContext(readFileSync(new URL('../desktop/wallpaper-input-preload.cjs', import.meta.url), 'utf8'), {
+    require: () => ({ ipcRenderer }), document,
+    window: { addEventListener: (_name, callback) => callback() },
+  })
+  const pointer = { isTrusted: true, clientX: 910, clientY: 810, button: 0, detail: 1, pointerId: 1,
+    target: { setPointerCapture: vi.fn() }, preventDefault: vi.fn() }
+  try {
+    listeners.get('pointerdown')(pointer)
+    expect(f.bridge.dragging).toBe(true)
+    listeners.get('pointercancel')()
+    expect(f.bridge.dragging).toBe(false)
+    expect(f.target.webContents.sendInputEvent).toHaveBeenLastCalledWith({ type: 'mouseUp', x: 910, y: 810, button: 'left', clickCount: 1 })
+    const released = f.bridge.routedEvents
+    listeners.get('lostpointercapture')()
+    expect(f.bridge.routedEvents).toBe(released)
+    listeners.get('pointerdown')(pointer); listeners.get('pointerup')(pointer)
+    expect(f.bridge.dragging).toBe(false)
+    expect(f.bridge.routedEvents).toBe(released + 2)
+  } finally { f.bridge.destroy() }
+})
 it('reactivates a reloaded renderer with a fresh cursor sample without duplicating polling', () => {
   vi.useFakeTimers()
   const f = fixture({ getCursorScreenPoint: () => ({ x: 100, y: 200 }) })

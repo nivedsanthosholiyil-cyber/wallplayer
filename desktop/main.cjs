@@ -77,7 +77,11 @@ async function hostFailure(error, failedHost) {
   // our own window rather than showing a potentially stranded child as a popup.
   scheduleWindowRecovery('window')
   if (window && !window.isDestroyed()) window.destroy()
-  dialog.showErrorBox('Spontaneous wallpaper mode', `${error.message}\nSpontaneous will reopen in normal-window mode. Reconnect Spotify if necessary.`)
+  // Recovery must continue even while the user leaves this notification open.
+  void dialog.showMessageBox({ type: 'error', title: 'Spontaneous wallpaper mode',
+    message: `${error.message}\nSpontaneous will reopen in normal-window mode. Reconnect Spotify if necessary.`,
+    buttons: ['OK'],
+  }).catch(error => log('Could not show wallpaper recovery notification: ' + error.message))
 }
 async function changeMode(next, remember = true) {
   if (quitting || changingMode || !window || window.isDestroyed()) return
@@ -114,6 +118,11 @@ async function changeMode(next, remember = true) {
         recordStatus('native-status')
       })
       controller.on('failure', error => void hostFailure(error, controller))
+      controller.on('activity', active => {
+        if (host !== controller || quitting) return
+        wallpaperInput?.setDesktopActive(active)
+        recordStatus('desktop-activity')
+      })
       controller.on('window-lost', scheduleWindowRecovery)
       controller.on('recovering', () => { if (lastStatus !== 'recovering') { lastStatus = 'recovering'; log('Waiting for Explorer desktop recovery'); recordStatus('explorer-recovering') } })
       await controller.start('wallpaper')

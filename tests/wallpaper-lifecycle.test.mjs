@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url)
 const fixtures = []
 async function desktop() {
   const directory = await mkdtemp(join(tmpdir(), 'musicwall-lifecycle-'))
-  const windows = [], helpers = []
+  const windows = [], helpers = [], inputs = []
   const app = Object.assign(new EventEmitter(), {
     commandLine: { appendSwitch: vi.fn() },
     setName() {}, setAppUserModelId() {}, getPath: () => directory, getAppPath: () => resolve('.'),
@@ -41,7 +41,7 @@ async function desktop() {
   const server = Object.assign(new EventEmitter(), { pid: 22,
     postMessage: vi.fn(data => { if(data.type === 'shutdown') queueMicrotask(() => server.emit('exit', 0)); if(data.type === 'oauth-begin') queueMicrotask(() => server.emit('message',{type:'oauth-ready',state:data.state})) }), kill: vi.fn(),
   })
-  const electron = { app, BrowserWindow: Window, dialog: { showErrorBox: vi.fn() },
+  const electron = { app, BrowserWindow: Window, dialog: { showErrorBox: vi.fn(), showMessageBox: vi.fn(() => new Promise(() => {})) },
     Menu: { buildFromTemplate: value => value, setApplicationMenu() {} },
     shell: { openExternal: vi.fn().mockResolvedValue(undefined) }, session: { defaultSession: Object.assign(new EventEmitter(), { setPermissionRequestHandler() {}, setPermissionCheckHandler() {} }) },
     ipcMain: {handle:vi.fn(),removeHandler:vi.fn()}, safeStorage:{isAsyncEncryptionAvailable:vi.fn().mockResolvedValue(true)},
@@ -51,10 +51,10 @@ async function desktop() {
   }
   const entry = require.resolve('../desktop/main.cjs'), load = Module._load
   const args = [...process.argv]; process.argv.push('--wallpaper')
-  class Input { ready=Promise.resolve(); handle='2'; setActive() {} destroy() {} }
+  class Input { constructor() { inputs.push(this) } ready=Promise.resolve(); handle='2'; setActive() {} setDesktopActive=vi.fn(); destroy() {} }
   Module._load = function (name, ...rest) { return name === 'electron' ? electron : name === './wallpaper-controller.cjs' ? { WallpaperController: Host } : name === './wallpaper-input.cjs' ? { WallpaperInput: Input } : load.call(this, name, ...rest) }
   try { delete require.cache[entry]; require(entry) } finally { Module._load = load; process.argv.splice(0, process.argv.length, ...args) }
-  const fixture = { app, directory, windows, helpers, server, electron, entry,
+  const fixture = { app, directory, windows, helpers, inputs, server, electron, entry,
     status: async () => JSON.parse(await readFile(join(directory, 'desktop-status.json'), 'utf8')) }
   fixtures.push(fixture)
   await vi.waitFor(async () => expect(await fixture.status()).toMatchObject({ event: 'mode-settled', mode: 'wallpaper' }))
@@ -71,6 +71,16 @@ afterEach(async () => {
     await rm(item.directory, { recursive: true, force: true })
   }
 })
+it.runIf(process.platform === 'win32')('forwards foreground activity without stopping the player server or changing wallpaper mode', async () => {
+  const f = await desktop()
+  f.helpers[0].emit('activity', false)
+  expect(f.inputs[0].setDesktopActive).toHaveBeenCalledWith(false)
+  expect(f.server.postMessage).not.toHaveBeenCalledWith({type:'shutdown'})
+  expect(f.windows[0].destroyed).not.toBe(true)
+  expect(await f.status()).toMatchObject({mode:'wallpaper',desiredMode:'wallpaper'})
+  f.helpers[0].emit('activity', true)
+  expect(f.inputs[0].setDesktopActive).toHaveBeenLastCalledWith(true)
+})
 it.runIf(process.platform === 'win32')('recreates an Explorer-lost window in the desired wallpaper mode and cleans both processes on quit', async () => {
   const f = await desktop(); vi.useFakeTimers()
   f.helpers[0].windowLost = true; f.helpers[0].emit('window-lost')
@@ -84,7 +94,7 @@ it.runIf(process.platform === 'win32')('recreates an Explorer-lost window in the
   expect(f.server.postMessage).toHaveBeenCalledWith({ type: 'shutdown' })
   expect(f.server.kill).not.toHaveBeenCalled()
 })
-it.runIf(process.platform === 'win32')('returns to a normal window after a crash without overwriting the desired wallpaper preference', async () => {
+it.runIf(process.platform === 'win32')('recovers while the error dialog remains open without overwriting the desired wallpaper preference', async () => {
   const f = await desktop(); vi.useFakeTimers()
   f.helpers[0].failed = true; f.helpers[0].emit('failure', new Error('native attachment failed'))
   await vi.advanceTimersByTimeAsync(2000)
@@ -93,7 +103,11 @@ it.runIf(process.platform === 'win32')('returns to a normal window after a crash
   expect(await f.status()).toMatchObject({ mode: 'window', desiredMode: 'wallpaper' })
   expect(JSON.parse(await readFile(join(f.directory, 'desktop-mode.json'), 'utf8'))).toEqual({ mode: 'wallpaper' })
   expect(f.app.quit).not.toHaveBeenCalled()
-  expect(f.electron.dialog.showErrorBox).toHaveBeenCalledOnce()
+  expect(f.electron.dialog.showErrorBox).not.toHaveBeenCalled()
+  expect(f.electron.dialog.showMessageBox).toHaveBeenCalledOnce()
+  expect(f.electron.dialog.showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
+    type: 'error', title: 'Spontaneous wallpaper mode', message: expect.stringContaining('native attachment failed'),
+  }))
   // A subsequent real mode request still works through the existing second-instance action.
   f.app.emit('second-instance', {}, ['--wallpaper']); await vi.advanceTimersByTimeAsync(0)
   expect(await f.status()).toMatchObject({ mode: 'wallpaper', desiredMode: 'wallpaper' })

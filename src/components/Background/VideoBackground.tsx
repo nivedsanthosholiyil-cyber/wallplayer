@@ -33,7 +33,7 @@ function BackgroundMedia({ layer, active, inactive, settings, isPlaying, isMuted
     media.muted = ambient || isMuted
     media.volume = ambient ? 0 : volume
     media.playbackRate = settings?.videoSpeed ?? 1
-    if (movement.enabled && active && (ambient || isPlaying) && !(settings?.pauseWhenInactive && inactive)) void media.play().catch(error => {
+    if (movement.enabled && active && (ambient || isPlaying) && !inactive) void media.play().catch(error => {
       // A later pause/unmount aborts an in-flight play normally. Other failures
       // need a visible diagnostic instead of disappearing into an empty catch.
       if (error?.name !== 'AbortError') { motionDiagnostic('video', 'play-rejected'); console.warn('[MusicWall video] Playback rejected:', error?.name || 'Error') }
@@ -44,8 +44,8 @@ function BackgroundMedia({ layer, active, inactive, settings, isPlaying, isMuted
     const media = video.current
     return () => { media?.pause(); media?.removeAttribute('src'); media?.load() }
   }, [])
-  return <motion.div className="video-background__layer" initial={false} animate={{ opacity: layer.visible || layer.loaded ? 1 : 0 }} transition={{ duration: movement.crossfade, ease: 'easeOut' }}>
-    {layer.visual.kind === 'video' ? <video ref={video} className="video-background__media" src={layer.visual.src} poster={layer.visual.poster} autoPlay={movement.enabled} muted={ambient || isMuted} loop={ambient || (settings?.loopVideo ?? true)} playsInline preload="auto" onLoadedData={onReady} onError={onError} style={{ objectPosition: position, objectFit: ambient ? 'cover' : undefined }} />
+  return <motion.div className="video-background__layer" initial={false} animate={{ opacity: layer.visible || (layer.loaded && !inactive) ? 1 : 0 }} transition={{ duration: movement.crossfade, ease: 'easeOut' }}>
+    {layer.visual.kind === 'video' ? <video ref={video} className="video-background__media" src={layer.visual.src} poster={layer.visual.poster} autoPlay={movement.enabled && !inactive} muted={ambient || isMuted} loop={ambient || (settings?.loopVideo ?? true)} playsInline preload="auto" onLoadedData={onReady} onError={onError} style={{ objectPosition: position, objectFit: ambient ? 'cover' : undefined }} />
       : ambient ? <AlbumArtBackground imageUrl={layer.visual.src} trackId={trackId ?? null} onReady={onReady} onError={onError} /> : <img className="video-background__media video-background__image" src={layer.visual.src} alt="" onLoad={onReady} onError={onError} style={{ objectPosition: position }} />}
   </motion.div>
 }
@@ -53,6 +53,31 @@ function BackgroundMedia({ layer, active, inactive, settings, isPlaying, isMuted
 export function VideoBackground({ visual, isPlaying, isMuted, volume, artwork, settings, ambient = false, hold = false, trackId = null }: VideoBackgroundProps) {
   const movement = useMotionSettings()
   const scene = useRef<HTMLDivElement>(null)
+  const [inactive, setInactive] = useState(document.hidden)
+  const [desktopVisible, setDesktopVisible] = useState(document.documentElement.hasAttribute('data-wallpaper-input'))
+  const [desktopPaused, setDesktopPaused] = useState(document.documentElement.hasAttribute('data-wallpaper-paused'))
+  const backgroundPaused = settings?.pauseWhenInactive !== false && (desktopVisible ? desktopPaused : inactive)
+  const suspended = useRef(backgroundPaused)
+  const held = useRef(hold || backgroundPaused)
+  suspended.current = backgroundPaused
+  held.current = hold || backgroundPaused
+  useEffect(() => {
+    const update = () => {
+      setDesktopVisible(document.documentElement.hasAttribute('data-wallpaper-input'))
+      setDesktopPaused(document.documentElement.hasAttribute('data-wallpaper-paused'))
+    }
+    const observer = new MutationObserver(update)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-wallpaper-input', 'data-wallpaper-paused'] })
+    return () => observer.disconnect()
+  }, [])
+  useEffect(() => {
+    if (!backgroundPaused) window.dispatchEvent(new Event('musicwall:request-wallpaper-pointer'))
+    // Freeze any parallax transition already in flight at its current frame.
+    // Resume only animations this effect paused; never alter global motion.
+    const running = backgroundPaused ? (scene.current?.getAnimations?.({ subtree: true }) ?? []).filter(animation => animation.playState === 'running') : []
+    running.forEach(animation => animation.pause())
+    return () => running.forEach(animation => { if (animation.playState === 'paused') animation.play() })
+  }, [backgroundPaused])
   useEffect(() => { motionDiagnostic('background', 'mount'); return () => motionDiagnostic('background', 'cleanup') }, [])
   useEffect(() => {
     const element = scene.current
@@ -61,11 +86,13 @@ export function VideoBackground({ visual, isPlaying, isMuted, volume, artwork, s
     let frame = 0
     let x = 0; let y = 0
     const update = (clientX: number, clientY: number) => {
+      if (suspended.current) return
       const amount = Math.max(0, Math.min(1, (settings?.motionIntensity ?? 50) / 50))
       x = (clientX / window.innerWidth - .5) * 2 * movement.parallax * amount
       y = (clientY / window.innerHeight - .5) * 2 * movement.parallax * amount
       if (!frame) frame = requestAnimationFrame(() => {
         frame = 0
+        if (suspended.current) return
         if (ambient) {
           // Move within cover's existing crop; never enlarge the album artwork.
           element.style.setProperty('--album-x', `${50 + x / 2}%`)
@@ -83,14 +110,6 @@ export function VideoBackground({ visual, isPlaying, isMuted, volume, artwork, s
     window.dispatchEvent(new Event('musicwall:request-wallpaper-pointer'))
     return () => { motionDiagnostic('parallax', 'stop'); window.removeEventListener('pointermove', move); window.removeEventListener('musicwall:wallpaper-pointer', desktopMove); cancelAnimationFrame(frame); element.style.transform = 'none'; element.style.removeProperty('--album-x'); element.style.removeProperty('--album-y') }
   }, [movement.enabled, movement.parallax, settings?.motionIntensity, settings?.motionStyle, ambient])
-  const [inactive, setInactive] = useState(document.hidden)
-  const [desktopVisible, setDesktopVisible] = useState(document.documentElement.hasAttribute('data-wallpaper-input'))
-  useEffect(() => {
-    const update = () => setDesktopVisible(document.documentElement.hasAttribute('data-wallpaper-input'))
-    const observer = new MutationObserver(update)
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-wallpaper-input'] })
-    return () => observer.disconnect()
-  }, [])
   const [layers, setLayers] = useState<Layer[]>([{ key: keyOf(fallback), visual: fallback, visible: true, loaded: false }])
   const desired = useRef(keyOf(fallback))
   const cleanupTimer = useRef<number | null>(null)
@@ -105,11 +124,20 @@ export function VideoBackground({ visual, isPlaying, isMuted, volume, artwork, s
   } as CSSProperties
   useEffect(() => {
     const onVisibility = () => setInactive(document.hidden)
+    const onBlur = () => setInactive(true)
+    const onFocus = () => setInactive(document.hidden)
     document.addEventListener('visibilitychange', onVisibility)
-    return () => { document.removeEventListener('visibilitychange', onVisibility); if (cleanupTimer.current !== null) window.clearTimeout(cleanupTimer.current) }
+    window.addEventListener('blur', onBlur)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('blur', onBlur)
+      window.removeEventListener('focus', onFocus)
+      if (cleanupTimer.current !== null) window.clearTimeout(cleanupTimer.current)
+    }
   }, [])
   useEffect(() => {
-    if (hold) return
+    if (hold || (backgroundPaused && desired.current !== keyOf(fallback))) return
     const key = visualKey
     desired.current = key
     if (cleanupTimer.current !== null) window.clearTimeout(cleanupTimer.current)
@@ -117,15 +145,16 @@ export function VideoBackground({ visual, isPlaying, isMuted, volume, artwork, s
       const existing = current.find((layer) => layer.key === key)
       if (existing?.visible) return current.filter((layer) => layer.visible)
       if (existing?.loaded) {
+        if (backgroundPaused) return current
         cleanupTimer.current = window.setTimeout(() => setLayers((layers) => layers.filter((layer) => layer.visible || layer.key === desired.current)), movement.crossfade * 1000 + 50)
         return current.filter((layer) => layer.visible || layer.key === key).map((layer) => ({ ...layer, visible: layer.key === key })).sort((a, b) => Number(a.visible) - Number(b.visible))
       }
       // Keep the displayed frame while a new image/video loads. Discard superseded pending media.
       return [...current.filter((layer) => layer.visible), { key, visual, visible: false, loaded: false, trackId }]
     })
-  }, [visualKey, hold])
+  }, [visualKey, hold, backgroundPaused])
   function ready(key: string) {
-    if (key !== desired.current) { setLayers((current) => current.map((layer) => layer.key === key ? { ...layer, loaded: true } : layer)); return }
+    if (held.current || key !== desired.current) { setLayers((current) => current.map((layer) => layer.key === key ? { ...layer, loaded: true } : layer)); return }
     // Keep the decoded old frame opaque underneath the incoming fade, avoiding a dark dip.
     setLayers((current) => current.map((layer) => ({ ...layer, loaded: layer.loaded || layer.key === key, visible: layer.key === key })).sort((a, b) => Number(a.visible) - Number(b.visible)))
     if (cleanupTimer.current !== null) window.clearTimeout(cleanupTimer.current)
@@ -149,12 +178,12 @@ export function VideoBackground({ visual, isPlaying, isMuted, volume, artwork, s
     // Cap the additional crop at 0.8% even at the strongest global Motion setting.
     '--breathing-scale': 1 + .008 * (movement.enabled ? movement.intensity : 0) * idleAmount,
     animationDuration: `${movement.backgroundDuration * .5}s`,
-    animationPlayState: settings?.pauseWhenInactive && inactive && !desktopVisible ? 'paused' : 'running',
+    animationPlayState: backgroundPaused ? 'paused' : 'running',
   } as CSSProperties
-  return <div className="video-background" aria-hidden="true" style={variables}>
+  return <div className="video-background" aria-hidden="true" data-paused={backgroundPaused} style={variables}>
     <div ref={scene} className="video-background__scene" data-parallax={movement.enabled && idleAmount > 0 && settings?.motionStyle !== 'ambient' && settings?.motionStyle !== 'off'} data-album-art={ambient}>
       <div className="video-background__idle" data-moving={movement.enabled && idleAmount > 0 && settings?.motionStyle !== 'parallax' && settings?.motionStyle !== 'off'} style={idleStyle}>
-        {layers.map((layer) => <BackgroundMedia key={layer.key} layer={layer} active={layer.visible || layer.key === desired.current} inactive={inactive && !desktopVisible} settings={settings} isPlaying={isPlaying} isMuted={isMuted} volume={volume} ambient={ambient} trackId={layer.trackId} onReady={() => ready(layer.key)} onError={() => failed(layer.key)} />)}
+        {layers.map((layer) => <BackgroundMedia key={layer.key} layer={layer} active={layer.visible || layer.key === desired.current} inactive={backgroundPaused} settings={settings} isPlaying={isPlaying} isMuted={isMuted} volume={volume} ambient={ambient} trackId={layer.trackId} onReady={() => ready(layer.key)} onError={() => failed(layer.key)} />)}
       </div>
     </div>
     {artwork && !ambient && <div className="video-background__artwork-tint" style={{ backgroundImage: `url(${artwork})` }} />}

@@ -17,6 +17,7 @@ export function useInterfaceSettings() {
   const [customWallpaper, setCustomWallpaper] = useState<CustomWallpaper | null>(null)
   const [wallpaperError, setWallpaperError] = useState('')
   const mounted = useRef(false)
+  const wallpaperRevision = useRef(0)
 
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(settings)) } catch { /* Settings still work for this session. */ }
@@ -25,8 +26,9 @@ export function useInterfaceSettings() {
   useEffect(() => {
     mounted.current = true
     let disposed = false
+    const revision = wallpaperRevision.current
     void wallpaperAsset.get().then((blob) => {
-      if (!blob || disposed) return
+      if (!blob || disposed || wallpaperRevision.current !== revision) return
       const url = URL.createObjectURL(blob)
       setCustomWallpaper({ url, kind: blob.type.startsWith('video/') ? 'video' : 'image', name: 'Saved wallpaper' })
     }).catch(() => {})
@@ -52,16 +54,19 @@ export function useInterfaceSettings() {
       setWallpaperError('Choose an image or video file.')
       return
     }
+    const revision = ++wallpaperRevision.current
     try {
       await wallpaperAsset.save(file)
-      if (!mounted.current) return
+      if (!mounted.current || wallpaperRevision.current !== revision) return
       const url = URL.createObjectURL(file)
       setCustomWallpaper({ url, kind: file.type.startsWith('video/') ? 'video' : 'image', name: file.name })
       setWallpaperError('')
-    } catch { setWallpaperError('This browser could not save the wallpaper locally.') }
+    } catch { if (mounted.current && wallpaperRevision.current === revision) setWallpaperError('This browser could not save the wallpaper locally.') }
   }
   async function removeWallpaper() {
-    try { await wallpaperAsset.remove() } catch { setWallpaperError('Could not remove the saved wallpaper.'); return }
+    const revision = ++wallpaperRevision.current
+    try { await wallpaperAsset.remove() } catch { if (mounted.current && wallpaperRevision.current === revision) setWallpaperError('Could not remove the saved wallpaper.'); return }
+    if (!mounted.current || wallpaperRevision.current !== revision) return
     setCustomWallpaper(null)
     updateWallpaper('source', 'current')
     setWallpaperError('')

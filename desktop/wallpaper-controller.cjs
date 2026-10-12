@@ -48,6 +48,14 @@ class WallpaperController extends EventEmitter {
   }
   receive(message) {
     if (this.stopping) return
+    if (message.type === 'activity') {
+      if (typeof message.active !== 'boolean') throw new Error('Invalid desktop activity response')
+      if (message.active !== this.desktopActive) {
+        this.desktopActive = message.active
+        this.emit('activity', message.active)
+      }
+      return
+    }
     if (message.type === 'error') { this.fail(new Error(message.message || 'Wallpaper helper failed')); return }
     if (message.type === 'window-lost') {
       this.windowLost = true; clearInterval(this.watchdog)

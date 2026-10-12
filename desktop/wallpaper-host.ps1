@@ -31,6 +31,7 @@ try {
   [MusicWallWallpaper]::StartInput()
   $lastCheck = [DateTime]::UtcNow
   $lastStatus = [DateTime]::UtcNow
+  $lastActive = $null
   $recoveringSince = $null
   while ($true) {
     $line = [MusicWallWallpaper]::ReadCommand()
@@ -61,6 +62,11 @@ try {
         }
       }
       $lastCheck=[DateTime]::UtcNow
+      $desktopActive = $mode -ne 'wallpaper' -or $native.DesktopIsActive()
+      if ($desktopActive -ne $lastActive) {
+        Send-Status @{ type='activity'; active=$desktopActive }
+        $lastActive = $desktopActive
+      }
       if (($lastCheck-$lastStatus).TotalSeconds -ge 5) {
         Send-Status @{ type='heartbeat'; mode=$mode; details=$details }
         $lastStatus=$lastCheck

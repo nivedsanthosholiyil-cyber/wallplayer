@@ -10,7 +10,7 @@ function desktopStatus({ event, mode, desiredMode, changingMode, quitting, recov
     native: native ? Object.fromEntries(['Window', 'Parent', 'Kind', 'Child', 'Visible', 'BehindIcons', 'Verified', 'X', 'Y', 'Width', 'Height', 'ExpectedX', 'ExpectedY', 'ExpectedWidth', 'ExpectedHeight'].filter(key => key in native).map(key => [key, native[key]])) : null,
     helper: { pid: host?.child?.pid ?? null, running: !!host?.child && !host.closed, stopping: !!host?.stopping, heartbeat: host?.lastHeartbeat ?? null },
     server: { pid: server?.pid ?? null, ready: !!serverReady },
-    input: input ? { active: !!input.active, regionCount: input.regionCount, routedEvents: input.routedEvents, pointerSamples: input.pointerSamples } : null,
+    input: input ? { active: !!input.active, desktopActive: input.desktopActive !== false, regionCount: input.regionCount, routedEvents: input.routedEvents, pointerSamples: input.pointerSamples } : null,
     errors: errors.map(entry => ({ ...entry })),
   }
 }
